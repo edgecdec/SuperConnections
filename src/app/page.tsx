@@ -190,6 +190,8 @@ function GameContent() {
 
   const { sendAction, isHost } = useSocket(roomCode, handleSocketUpdate, getGameState);
 
+  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
+
   // Load state from local storage on mount (Solo or Host fallback)
   useEffect(() => {
     try {
