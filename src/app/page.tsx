@@ -166,10 +166,12 @@ function GameContent() {
   const isRemoteUpdate = useRef(false);
   const hasJoined = useRef(false);
 
-  const handleSocketUpdate = useCallback((newState: any) => {
-    if (!newState) return;
+  const handleSocketUpdate = useCallback((newState: any, version: number) => {
+    if (!newState || !newState.tiles || newState.tiles.length === 0) return;
+    
     isRemoteUpdate.current = true;
     hasJoined.current = true;
+    
     setGridSize(newState.gridSize);
     setTiles(newState.tiles);
     setUserGroups(newState.userGroups);
@@ -179,10 +181,10 @@ function GameContent() {
     setTilesPerRow(newState.tilesPerRow);
     setAutoRefill(newState.autoRefill);
     setIsPlaying(true);
-    // Use a small timeout to allow React to process state updates before clearing the flag
+    
     setTimeout(() => {
       isRemoteUpdate.current = false;
-    }, 100);
+    }, 200);
   }, []);
 
   const { updateServerState, isHost } = useSocket(roomCode, handleSocketUpdate);

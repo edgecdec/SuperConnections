@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import io from 'socket.io-client';
 
-export function useSocket(roomCode: string | null, onStateUpdate: (state: any) => void) {
+export function useSocket(roomCode: string | null, onStateUpdate: (state: any, version: number) => void) {
   const socketRef = useRef<any>(null);
   const [isHost, setIsHost] = useState(false);
+  const versionRef = useRef(0);
 
   useEffect(() => {
     if (!roomCode) return;
@@ -18,12 +19,16 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any) =
       socket.emit('join_room', { code: roomCode });
     });
 
-    socket.on('init_session', (data: { isHost: boolean, userId: string }) => {
+    socket.on('init_session', (data: { isHost: boolean, userId: string, version: number }) => {
       setIsHost(data.isHost);
+      versionRef.current = data.version || 0;
     });
 
-    socket.on('state_update', (newState: any) => {
-      onStateUpdate(newState);
+    socket.on('state_update', (data: { gameState: any, version: number }) => {
+      if (data.version > versionRef.current) {
+        versionRef.current = data.version;
+        onStateUpdate(data.gameState, data.version);
+      }
     });
 
     return () => {
@@ -33,9 +38,10 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any) =
 
   const updateServerState = useCallback((gameState: any) => {
     if (socketRef.current && roomCode) {
-      // Ensure we don't send an empty state if we're in a room
       if (gameState.tiles && gameState.tiles.length > 0) {
-        socketRef.current.emit('update_state', { code: roomCode, gameState });
+        const newVersion = Date.now();
+        versionRef.current = newVersion;
+        socketRef.current.emit('update_state', { code: roomCode, gameState, version: newVersion });
       }
     }
   }, [roomCode]);

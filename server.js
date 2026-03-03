@@ -78,7 +78,8 @@ app.prepare().then(() => {
        if (!rooms[roomCode]) {
            rooms[roomCode] = {
                hostId: userId,
-               state: gameState || null
+               state: gameState || null,
+               version: gameState ? Date.now() : 0
            };
            console.log(`Room ${roomCode} created by ${userId}`);
        }
@@ -86,28 +87,40 @@ app.prepare().then(() => {
        // Inform the user if they are the host
        socket.emit('init_session', { 
            isHost: rooms[roomCode].hostId === userId,
-           userId: userId
+           userId: userId,
+           version: rooms[roomCode].version
        });
 
        // If room exists, send current state to the joining user
        if (rooms[roomCode].state) {
-           socket.emit('state_update', rooms[roomCode].state);
+           socket.emit('state_update', { 
+               gameState: rooms[roomCode].state, 
+               version: rooms[roomCode].version 
+           });
        }
 
        // If joining user is the host and provided a state, update it
        if (rooms[roomCode].hostId === userId && gameState) {
            rooms[roomCode].state = gameState;
-           socket.to(roomCode).emit('state_update', gameState);
+           rooms[roomCode].version = Date.now();
+           socket.to(roomCode).emit('state_update', { 
+               gameState: gameState, 
+               version: rooms[roomCode].version 
+           });
        }
     });
 
-    socket.on('update_state', ({ code, gameState }) => {
+    socket.on('update_state', ({ code, gameState, version }) => {
         if (!code || !rooms[code.toUpperCase()]) return;
         const roomCode = code.toUpperCase();
         
-        rooms[roomCode].state = gameState;
-        // Broadcast to everyone else in the room
-        socket.to(roomCode).emit('state_update', gameState);
+        // Only accept the update if the version is newer than what we have
+        if (version && version > rooms[roomCode].version) {
+            rooms[roomCode].state = gameState;
+            rooms[roomCode].version = version;
+            // Broadcast to everyone else in the room
+            socket.to(roomCode).emit('state_update', { gameState, version });
+        }
     });
   });
 
