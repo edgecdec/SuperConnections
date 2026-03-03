@@ -204,11 +204,15 @@ function GameContent() {
           if (parsed.tilesPerRow) setTilesPerRow(parsed.tilesPerRow);
           if (parsed.autoRefill !== undefined) setAutoRefill(parsed.autoRefill);
           
+          hasJoined.current = true;
+          console.log("State recovered from localStorage");
+
           setTimeout(() => {
             isRemoteUpdate.current = false;
           }, 200);
         }
       } else if (roomCodeFromUrl) {
+        console.log("Joining room from URL:", roomCodeFromUrl);
         setRoomCode(roomCodeFromUrl);
         setIsPlaying(true);
       }
