@@ -166,6 +166,39 @@ function GameContent() {
   const isRemoteUpdate = useRef(false);
   const hasJoined = useRef(false);
 
+  // Auto-join room from URL or load from LocalStorage
+  useEffect(() => {
+    if (roomCodeFromUrl) {
+      setRoomCode(roomCodeFromUrl);
+      setIsPlaying(true);
+      return;
+    }
+
+    try {
+      const saved = localStorage.getItem('superConnectionsState');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.isPlaying) {
+          isRemoteUpdate.current = true;
+          setGridSize(parsed.gridSize || 4);
+          setIsPlaying(parsed.isPlaying);
+          setTiles(parsed.tiles || []);
+          setUserGroups(parsed.userGroups || []);
+          setCompletedCategories(parsed.completedCategories || []);
+          setMistakes(parsed.mistakes || 0);
+          setScore(parsed.score || 0);
+          if (parsed.tilesPerRow) setTilesPerRow(parsed.tilesPerRow);
+          if (parsed.autoRefill !== undefined) setAutoRefill(parsed.autoRefill);
+          setTimeout(() => {
+            isRemoteUpdate.current = false;
+          }, 100);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load state', e);
+    }
+  }, [roomCodeFromUrl]);
+
   const handleSocketUpdate = useCallback((newState: any, version: number) => {
     if (!newState || !newState.tiles || newState.tiles.length === 0) return;
     
@@ -224,34 +257,6 @@ function GameContent() {
       }, 1000);
     }
   }, [roomCode, updateServerState, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill, isHost]);
-
-  // Load state from local storage on mount
-  useEffect(() => {
-    if (roomCodeFromUrl) return; // Prioritize socket state if in a room
-    try {
-      const saved = localStorage.getItem('superConnectionsState');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.isPlaying) {
-          isRemoteUpdate.current = true;
-          setGridSize(parsed.gridSize || 4);
-          setIsPlaying(parsed.isPlaying);
-          setTiles(parsed.tiles || []);
-          setUserGroups(parsed.userGroups || []);
-          setCompletedCategories(parsed.completedCategories || []);
-          setMistakes(parsed.mistakes || 0);
-          setScore(parsed.score || 0);
-          if (parsed.tilesPerRow) setTilesPerRow(parsed.tilesPerRow);
-          if (parsed.autoRefill !== undefined) setAutoRefill(parsed.autoRefill);
-          setTimeout(() => {
-            isRemoteUpdate.current = false;
-          }, 100);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load state', e);
-    }
-  }, [roomCodeFromUrl]);
 
   // Save state to local storage when it changes
   useEffect(() => {
@@ -336,6 +341,9 @@ function GameContent() {
       const newRoomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
       setRoomCode(newRoomCode);
       router.push(`/?room=${newRoomCode}`);
+    } else {
+      setRoomCode(null);
+      router.push('/');
     }
   };
 
@@ -581,14 +589,6 @@ function GameContent() {
           Host Multiplayer
         </Button>
       </Box>
-      {roomCodeFromUrl && (
-        <Box mt={4} textAlign="center">
-          <Typography variant="body1" gutterBottom>You are invited to join room: <strong>{roomCodeFromUrl}</strong></Typography>
-          <Button variant="contained" color="secondary" onClick={() => { setRoomCode(roomCodeFromUrl); setIsPlaying(true); }}>
-            Join Game
-          </Button>
-        </Box>
-      )}
     </Box>
   );
 
@@ -614,65 +614,71 @@ function GameContent() {
 
   const renderGame = () => (
     <Box display="flex" height="100vh" p={2} gap={2}>
-      <Box flex={3} display="flex" flexDirection="column" sx={{ overflowY: 'auto' }}>
-        <Box display="flex" justifyContent="space-between" alignItems="center">
-          <Typography variant="h4" gutterBottom>Super Connections ({gridSize}x{gridSize})</Typography>
-          {roomCode && (
-            <Box display="flex" alignItems="center" gap={1}>
-              <Typography variant="h6" color="primary">Room: {roomCode}</Typography>
-              <Tooltip title="Copy Invite Link">
-                <IconButton size="small" onClick={copyRoomLink}>
-                  <ContentCopyIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
+      {isPlaying && roomCode && tiles.length === 0 ? (
+        <Box flex={3} display="flex" alignItems="center" justifyContent="center">
+          <Typography variant="h5">Syncing with room {roomCode}...</Typography>
+        </Box>
+      ) : (
+        <Box flex={3} display="flex" flexDirection="column" sx={{ overflowY: 'auto' }}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h4" gutterBottom>Super Connections ({gridSize}x{gridSize})</Typography>
+            {roomCode && (
+              <Box display="flex" alignItems="center" gap={1}>
+                <Typography variant="h6" color="primary">Room: {roomCode}</Typography>
+                <Tooltip title="Copy Invite Link">
+                  <IconButton size="small" onClick={copyRoomLink}>
+                    <ContentCopyIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            )}
+          </Box>
+          
+          {completedCategories.length > 0 && (
+            <Box mb={2}>
+              {completedCategories.map((cat) => (
+                <Paper key={cat} sx={{ p: 2, mb: 1, backgroundColor: '#d4edda', textAlign: 'center' }}>
+                  <Typography variant="h6">{cat}</Typography>
+                  <Typography variant="body2">
+                    {tiles.filter(t => t.realCategory === cat).map(t => t.text).join(', ')}
+                  </Typography>
+                </Paper>
+              ))}
             </Box>
           )}
-        </Box>
-        
-        {completedCategories.length > 0 && (
-          <Box mb={2}>
-            {completedCategories.map((cat) => (
-              <Paper key={cat} sx={{ p: 2, mb: 1, backgroundColor: '#d4edda', textAlign: 'center' }}>
-                <Typography variant="h6">{cat}</Typography>
-                <Typography variant="body2">
-                  {tiles.filter(t => t.realCategory === cat).map(t => t.text).join(', ')}
-                </Typography>
-              </Paper>
-            ))}
-          </Box>
-        )}
 
-        <Box sx={{ flexGrow: 1, overflowX: 'auto', pb: 2 }}>
-          <Box
-            display="grid"
-            gap={1}
-            gridTemplateColumns={`repeat(${tilesPerRow}, minmax(100px, 1fr))`}
-            sx={{ minWidth: 'min-content' }}
-          >
-            {tiles.filter(t => !t.locked).map((tile) => {
-              if (tile.hidden) {
-                return <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} />;
-              }
-              const group = userGroups.find((g) => g.id === tile.userGroupId);
-              const isSelected = selectedTile?.id === tile.id;
-              return (
-                <TileComponent
-                  key={tile.id}
-                  tile={tile}
-                  group={group}
-                  gridSize={gridSize}
-                  isSelected={isSelected}
-                  onMenuOpen={handleMenuOpen}
-                  onTileClick={handleTileClick}
-                  onDragStart={handleDragStart}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                />
-              );
-            })}
+          <Box sx={{ flexGrow: 1, overflowX: 'auto', pb: 2 }}>
+            <Box
+              display="grid"
+              gap={1}
+              gridTemplateColumns={`repeat(${tilesPerRow}, minmax(100px, 1fr))`}
+              sx={{ minWidth: 'min-content' }}
+            >
+              {tiles.filter(t => !t.locked).map((tile) => {
+                if (tile.hidden) {
+                  return <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} />;
+                }
+                const group = userGroups.find((g) => g.id === tile.userGroupId);
+                const isSelected = selectedTile?.id === tile.id;
+                return (
+                  <TileComponent
+                    key={tile.id}
+                    tile={tile}
+                    group={group}
+                    gridSize={gridSize}
+                    isSelected={isSelected}
+                    onMenuOpen={handleMenuOpen}
+                    onTileClick={handleTileClick}
+                    onDragStart={handleDragStart}
+                    onDragOver={handleDragOver}
+                    onDrop={handleDrop}
+                  />
+                );
+              })}
+            </Box>
           </Box>
         </Box>
-      </Box>
+      )}
 
       {sidebarExpanded ? (
         <Paper sx={{ flex: 1, minWidth: '300px', maxWidth: '350px', p: 2, display: 'flex', flexDirection: 'column', position: 'relative' }}>
