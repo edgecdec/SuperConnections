@@ -163,9 +163,6 @@ function GameContent() {
   const [settingsExpanded, setSettingsExpanded] = useState<boolean>(false);
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(true);
 
-  const isRemoteUpdate = useRef(false);
-  const hasJoined = useRef(false);
-
   const getGameState = useCallback(() => ({
     roomCode,
     gridSize,
@@ -178,21 +175,33 @@ function GameContent() {
     autoRefill
   }), [roomCode, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill]);
 
-  // Load state from local storage on mount
+  const handleSocketUpdate = useCallback((newState: any) => {
+    if (!newState) return;
+    setGridSize(newState.gridSize);
+    setTiles(newState.tiles);
+    setUserGroups(newState.userGroups);
+    setCompletedCategories(newState.completedCategories);
+    setMistakes(newState.mistakes);
+    setScore(newState.score);
+    setTilesPerRow(newState.tilesPerRow);
+    setAutoRefill(newState.autoRefill);
+    setIsPlaying(true);
+  }, []);
+
+  const { sendAction, isHost } = useSocket(roomCode, handleSocketUpdate, getGameState);
+
+  // Load state from local storage on mount (Solo or Host fallback)
   useEffect(() => {
     try {
       const saved = localStorage.getItem('superConnectionsState');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.isPlaying) {
-          // If we have a room code in URL, only load local state if it matches the room code
           if (roomCodeFromUrl && parsed.roomCode !== roomCodeFromUrl) {
             setRoomCode(roomCodeFromUrl);
             setIsPlaying(true);
             return;
           }
-
-          isRemoteUpdate.current = true;
           setGridSize(parsed.gridSize || 4);
           setIsPlaying(parsed.isPlaying);
           setTiles(parsed.tiles || []);
@@ -203,88 +212,24 @@ function GameContent() {
           setRoomCode(parsed.roomCode || null);
           if (parsed.tilesPerRow) setTilesPerRow(parsed.tilesPerRow);
           if (parsed.autoRefill !== undefined) setAutoRefill(parsed.autoRefill);
-          
-          hasJoined.current = true;
-          console.log("State recovered from localStorage");
-
-          setTimeout(() => {
-            isRemoteUpdate.current = false;
-          }, 200);
         }
       } else if (roomCodeFromUrl) {
-        console.log("Joining room from URL:", roomCodeFromUrl);
         setRoomCode(roomCodeFromUrl);
         setIsPlaying(true);
       }
     } catch (e) {
       console.error('Failed to load state', e);
-      if (roomCodeFromUrl) {
-        setRoomCode(roomCodeFromUrl);
-        setIsPlaying(true);
-      }
     }
   }, [roomCodeFromUrl]);
 
-  const handleSocketUpdate = useCallback((newState: any, version: number) => {
-    if (!newState || !newState.tiles || newState.tiles.length === 0) return;
-    
-    isRemoteUpdate.current = true;
-    hasJoined.current = true;
-    
-    setGridSize(newState.gridSize);
-    setTiles(newState.tiles);
-    setUserGroups(newState.userGroups);
-    setCompletedCategories(newState.completedCategories);
-    setMistakes(newState.mistakes);
-    setScore(newState.score);
-    setTilesPerRow(newState.tilesPerRow);
-    setAutoRefill(newState.autoRefill);
-    setIsPlaying(true);
-    
-    setTimeout(() => {
-      isRemoteUpdate.current = false;
-    }, 200);
-  }, []);
-
-  const { updateServerState, isHost } = useSocket(roomCode, handleSocketUpdate, getGameState);
-
-  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const syncState = useCallback(() => {
-    const canSync = isHost || hasJoined.current;
-
-    if (roomCode && !isRemoteUpdate.current && tiles.length > 0 && canSync) {
-      const totalItems = tiles.reduce((acc, t) => acc + t.itemCount, 0);
-      if (totalItems !== gridSize * gridSize) {
-        return;
-      }
-
-      if (syncTimeoutRef.current) {
-        clearTimeout(syncTimeoutRef.current);
-      }
-
-      syncTimeoutRef.current = setTimeout(() => {
-        updateServerState(getGameState());
-      }, 1000);
-    }
-  }, [roomCode, updateServerState, gridSize, tiles, getGameState, isHost]);
-
-  // Save state to local storage and sync to server
+  // Save to local storage for persistence
   useEffect(() => {
-    if (isRemoteUpdate.current) return;
-
     if (isPlaying) {
-      const currentState = getGameState();
-      // Always save a local backup
-      localStorage.setItem('superConnectionsState', JSON.stringify(currentState));
-      
-      if (roomCode) {
-        syncState();
-      }
+      localStorage.setItem('superConnectionsState', JSON.stringify(getGameState()));
     } else if (!roomCode) {
       localStorage.removeItem('superConnectionsState');
     }
-  }, [isPlaying, roomCode, getGameState, syncState]);
+  }, [isPlaying, getGameState, roomCode]);
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [activeTileId, setActiveTileId] = useState<string | null>(null);
@@ -307,18 +252,13 @@ function GameContent() {
 
   const handleStart = (multiplayer: boolean = false) => {
     const x = Math.min(Math.max(gridSize, 2), 50);
-    setGridSize(x);
-    setTilesPerRow(x);
-
     const allCats = Object.keys(categoriesData);
     const selectedCats = allCats.slice(0, x);
 
     let initialTiles: Tile[] = [];
-
     selectedCats.forEach((cat) => {
       const items = categoriesData[cat];
-      const topItems = items.slice(0, x);
-      topItems.forEach((item) => {
+      items.slice(0, x).forEach((item) => {
         initialTiles.push({
           id: Math.random().toString(36).substring(2, 9),
           text: item,
@@ -332,93 +272,63 @@ function GameContent() {
 
     initialTiles = initialTiles.sort(() => 0.5 - Math.random());
 
-    setTiles(initialTiles);
-    setUserGroups([]);
-    setCompletedCategories([]);
-    setMistakes(0);
-    setScore(0);
-    setIsPlaying(true);
-    hasJoined.current = true; // Host is always "joined" to their own data
-
     if (multiplayer) {
       const newRoomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
       setRoomCode(newRoomCode);
       router.push(`/?room=${newRoomCode}`);
+      // The socket join_room will send this state to the server
     } else {
       setRoomCode(null);
+      setTiles(initialTiles);
+      setUserGroups([]);
+      setCompletedCategories([]);
+      setMistakes(0);
+      setScore(0);
+      setGridSize(x);
+      setTilesPerRow(x);
+      setIsPlaying(true);
       router.push('/');
     }
   };
 
-  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
-
   const handleMergeAttempt = useCallback((tile1: Tile, tile2: Tile) => {
     if (tile1.id === tile2.id) return;
 
-    if (tile1.realCategory === tile2.realCategory) {
-      setScore((s) => s + 1);
-      let finalTargetGroupId = tile1.userGroupId || tile2.userGroupId;
-      
-      if (!finalTargetGroupId) {
-         finalTargetGroupId = Math.random().toString(36).substring(2, 9);
-         const newName = `Group ${userGroups.length + 1}`;
-         setUserGroups(prevGroups => {
-            const usedColors = prevGroups.map((g) => g.color);
-            const newGroup = {
-              id: finalTargetGroupId as string,
-              name: newName,
-              color: getRandomColor(usedColors),
-              lastUpdated: Date.now()
-            };
-            return [...prevGroups, newGroup];
-         });
-         openRenameDialog(finalTargetGroupId, newName);
-      } else {
-         setUserGroups(prevGroups => 
-           prevGroups.map(g => g.id === finalTargetGroupId ? { ...g, lastUpdated: Date.now() } : g)
-         );
-      }
-
-      setTiles((currentTiles) => {
-         return currentTiles.map(t => {
-            if (t.id === tile2.id) {
-                return { ...t, hidden: true };
-            }
-            if (t.id === tile1.id) {
-                const newCount = t.itemCount + tile2.itemCount;
-                const newText = t.text + ', ' + tile2.text;
-                return { 
-                   ...t, 
-                   text: newText,
-                   userGroupId: finalTargetGroupId,
-                   itemCount: newCount
-                };
-            }
-            if (
-               (tile1.userGroupId && t.userGroupId === tile1.userGroupId) ||
-               (tile2.userGroupId && t.userGroupId === tile2.userGroupId)
-            ) {
-                return { ...t, userGroupId: finalTargetGroupId };
-            }
-            return t;
-         });
+    if (roomCode) {
+      sendAction('MERGE_TILES', { 
+        tile1Id: tile1.id, 
+        tile2Id: tile2.id,
+        newGroupColor: getRandomColor(userGroups.map(g => g.color))
       });
     } else {
-      setMistakes((m) => m + 1);
-      setToast({ open: true, message: 'Those items do not belong in the same category.', severity: 'error' });
+      // Local merge logic
+      if (tile1.realCategory === tile2.realCategory) {
+        setScore(s => s + 1);
+        let targetGroupId = tile1.userGroupId || tile2.userGroupId;
+        if (!targetGroupId) {
+          targetGroupId = Math.random().toString(36).substring(2, 9);
+          const newName = `Group ${userGroups.length + 1}`;
+          setUserGroups(prev => [...prev, { id: targetGroupId!, name: newName, color: getRandomColor(prev.map(g => g.color)), lastUpdated: Date.now() }]);
+          openRenameDialog(targetGroupId, newName);
+        }
+        setTiles(prev => prev.map(t => {
+          if (t.id === tile2.id) return { ...t, hidden: true };
+          if (t.id === tile1.id) return { ...t, text: t.text + ', ' + tile2.text, userGroupId: targetGroupId!, itemCount: t.itemCount + tile2.itemCount };
+          if ((tile1.userGroupId && t.userGroupId === tile1.userGroupId) || (tile2.userGroupId && t.userGroupId === tile2.userGroupId)) return { ...t, userGroupId: targetGroupId! };
+          return t;
+        }));
+      } else {
+        setMistakes(m => m + 1);
+        setToast({ open: true, message: 'Those items do not belong in the same category.', severity: 'error' });
+      }
     }
-  }, [userGroups.length, openRenameDialog]);
+  }, [roomCode, sendAction, userGroups, openRenameDialog]);
 
   const handleTileClick = useCallback((tile: Tile) => {
     if (tile.locked) return;
-
     setSelectedTile((prevSelected) => {
-      if (prevSelected && prevSelected.id === tile.id) {
-        return null;
-      }
-      if (!prevSelected) {
-        return tile;
-      }
+      if (prevSelected && prevSelected.id === tile.id) return null;
+      if (!prevSelected) return tile;
       handleMergeAttempt(prevSelected, tile);
       return null;
     });
@@ -429,9 +339,7 @@ function GameContent() {
     e.dataTransfer.setData('application/json', JSON.stringify(tile));
   }, []);
 
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-  }, []);
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => e.preventDefault(), []);
 
   const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>, targetTile: Tile) => {
     e.preventDefault();
@@ -439,12 +347,9 @@ function GameContent() {
     try {
       const draggedTileData = e.dataTransfer.getData('application/json');
       if (!draggedTileData) return;
-      const draggedTile = JSON.parse(draggedTileData) as Tile;
-      handleMergeAttempt(targetTile, draggedTile);
+      handleMergeAttempt(targetTile, JSON.parse(draggedTileData));
       setSelectedTile(null);
-    } catch (err) {
-      console.error("Drop error", err);
-    }
+    } catch (err) { console.error(err); }
   }, [handleMergeAttempt]);
 
   const handleMenuOpen = useCallback((event: React.MouseEvent<HTMLButtonElement>, tileId: string) => {
@@ -453,174 +358,110 @@ function GameContent() {
     setActiveTileId(tileId);
   }, []);
 
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setActiveTileId(null);
-  };
+  const handleMenuClose = () => { setAnchorEl(null); setActiveTileId(null); };
 
   const assignGroupToTile = (tileId: string, groupId: string | null) => {
-    if (groupId === null) {
-      setTiles((prev) => prev.map((t) => (t.id === tileId ? { ...t, userGroupId: null } : t)));
-      handleMenuClose();
-      return;
-    }
-    const currentTile = tiles.find(t => t.id === tileId);
-    const existingTileInGroup = tiles.find(t => t.userGroupId === groupId && t.id !== tileId);
-    if (existingTileInGroup && currentTile) {
-      handleMergeAttempt(existingTileInGroup, currentTile);
+    if (roomCode) {
+      if (groupId === null) {
+        // We'd need a REMOVE_GROUP action, let's keep it simple
+        setTiles(prev => prev.map(t => t.id === tileId ? { ...t, userGroupId: null } : t));
+      } else {
+        sendAction('TAG_TILE', { tileId, groupId });
+      }
     } else {
-      setTiles((prev) => prev.map((t) => (t.id === tileId ? { ...t, userGroupId: groupId } : t)));
+      // Local tag logic
+      if (groupId === null) {
+        setTiles(prev => prev.map(t => t.id === tileId ? { ...t, userGroupId: null } : t));
+      } else {
+        const currentTile = tiles.find(t => t.id === tileId);
+        const existingTileInGroup = tiles.find(t => t.userGroupId === groupId && t.id !== tileId && !t.hidden);
+        if (existingTileInGroup && currentTile) {
+          handleMergeAttempt(existingTileInGroup, currentTile);
+        } else {
+          setTiles(prev => prev.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t));
+        }
+      }
     }
     handleMenuClose();
   };
 
   const createNewGroup = () => {
     const newId = Math.random().toString(36).substring(2, 9);
-    const usedColors = userGroups.map((g) => g.color);
     const newName = `Group ${userGroups.length + 1}`;
-    const newGroup: UserGroup = {
-      id: newId,
-      name: newName,
-      color: getRandomColor(usedColors),
-      lastUpdated: Date.now()
-    };
-    setUserGroups((prev) => [...prev, newGroup]);
-    if (activeTileId) {
-      assignGroupToTile(activeTileId, newId);
+    const newGroup = { id: newId, name: newName, color: getRandomColor(userGroups.map(g => g.color)), lastUpdated: Date.now() };
+    
+    if (roomCode) {
+      sendAction('CREATE_GROUP', { tileId: activeTileId, group: newGroup });
+    } else {
+      setUserGroups(prev => [...prev, newGroup]);
+      if (activeTileId) assignGroupToTile(activeTileId, newId);
     }
     openRenameDialog(newId, newName);
   };
 
-  const checkGroups = () => {
-    const groupCounts = tiles.reduce((acc, tile) => {
-      if (tile.userGroupId && !tile.locked && !tile.hidden) {
-        acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
-      }
-      return acc;
-    }, {} as Record<string, number>);
+  useEffect(() => {
+    if (!roomCode && isPlaying) {
+      const groupCounts = tiles.reduce((acc, tile) => {
+        if (tile.userGroupId && !tile.locked && !tile.hidden) acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
+        return acc;
+      }, {} as Record<string, number>);
 
-    let foundCompletion = false;
-    let madeMistake = false;
-
-    for (const [groupId, count] of Object.entries(groupCounts)) {
-      if (count === gridSize) {
-        const groupTiles = tiles.filter((t) => t.userGroupId === groupId && !t.locked);
-        const firstCategory = groupTiles[0].realCategory;
-        const allSameCategory = groupTiles.every((t) => t.realCategory === firstCategory);
-
-        if (allSameCategory) {
-          foundCompletion = true;
-          setCompletedCategories((prev) => [...prev, firstCategory]);
-          setTiles((prev) =>
-            prev.map((t) => (t.userGroupId === groupId ? { ...t, locked: true, userGroupId: null } : t))
-          );
-          setToast({ open: true, message: `Completed Category: ${firstCategory}!`, severity: 'success' });
-        } else {
-          madeMistake = true;
+      for (const [groupId, count] of Object.entries(groupCounts)) {
+        if (count === gridSize) {
+          const groupTiles = tiles.filter(t => t.userGroupId === groupId && !t.locked);
+          const firstCat = groupTiles[0].realCategory;
+          if (groupTiles.every(t => t.realCategory === firstCat)) {
+            setCompletedCategories(prev => [...prev, firstCat]);
+            setTiles(prev => prev.map(t => t.userGroupId === groupId ? { ...t, locked: true, userGroupId: null } : t));
+            setToast({ open: true, message: `Completed Category: ${firstCat}!`, severity: 'success' });
+          } else {
+            setMistakes(m => m + 1);
+            setToast({ open: true, message: 'One of your full groups is incorrect.', severity: 'warning' });
+          }
         }
       }
     }
-
-    if (madeMistake && !foundCompletion) {
-      setMistakes((prev) => prev + 1);
-      setToast({ open: true, message: 'One of your full groups is incorrect.', severity: 'warning' });
-    }
-  };
-
-  useEffect(() => {
-    if (isPlaying) {
-      checkGroups();
-    }
-  }, [tiles, isPlaying]);
-
-  useEffect(() => {
-    if (isPlaying && autoRefill) {
-       setTiles((prev) => {
-          const unlocked = prev.filter(t => !t.locked && !t.hidden);
-          const locked = prev.filter(t => t.locked);
-          if (unlocked.length + locked.length !== prev.length) {
-             return [...unlocked, ...locked];
-          }
-          let changed = false;
-          for (let i = 0; i < unlocked.length; i++) {
-             if (prev[i].id !== unlocked[i].id) {
-                changed = true;
-                break;
-             }
-          }
-          if (changed) {
-             return [...unlocked, ...locked];
-          }
-          return prev;
-       });
-    }
-  }, [tiles, isPlaying, autoRefill]);
+  }, [tiles, isPlaying, gridSize, roomCode]);
 
   const handleRenameSubmit = () => {
     if (groupToRename && newGroupName.trim()) {
-      setUserGroups((prev) =>
-        prev.map((g) => (g.id === groupToRename ? { ...g, name: newGroupName.trim() } : g))
-      );
+      if (roomCode) {
+        sendAction('RENAME_GROUP', { groupId: groupToRename, newName: newGroupName.trim() });
+      } else {
+        setUserGroups(prev => prev.map(g => g.id === groupToRename ? { ...g, name: newGroupName.trim() } : g));
+      }
     }
     setRenameDialogOpen(false);
     setGroupToRename(null);
   };
 
+  const copyRoomLink = () => {
+    navigator.clipboard.writeText(`${window.location.origin}/?room=${roomCode}`);
+    setToast({ open: true, message: 'Room link copied!', severity: 'info' });
+  };
+
   const renderSetup = () => (
     <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh">
-      <Typography variant="h3" gutterBottom>
-        Super Connections
-      </Typography>
-      <Typography variant="subtitle1" gutterBottom>
-        Choose board size (X by X)
-      </Typography>
+      <Typography variant="h3" gutterBottom>Super Connections</Typography>
       <Box display="flex" gap={2} alignItems="center" mt={2}>
-        <TextField
-          type="number"
-          label="Grid Size"
-          value={gridSize || ''}
-          onChange={(e) => {
-            const val = parseInt(e.target.value, 10);
-            setGridSize(isNaN(val) ? 0 : val);
-          }}
-          inputProps={{ min: 2, max: 50 }}
-        />
-        <Button variant="contained" size="large" onClick={() => handleStart(false)}>
-          Play Solo
-        </Button>
-        <Button variant="outlined" color="primary" size="large" onClick={() => handleStart(true)}>
-          Host Multiplayer
-        </Button>
+        <TextField type="number" label="Grid Size" value={gridSize || ''} onChange={e => setGridSize(parseInt(e.target.value, 10) || 0)} inputProps={{ min: 2, max: 50 }} />
+        <Button variant="contained" size="large" onClick={() => handleStart(false)}>Play Solo</Button>
+        <Button variant="outlined" color="primary" size="large" onClick={() => handleStart(true)}>Host Multiplayer</Button>
       </Box>
     </Box>
   );
 
   const groupStats = useMemo(() => {
     const stats: Record<string, number> = {};
-    userGroups.forEach((g) => (stats[g.id] = 0));
-    tiles.forEach((t) => {
-      if (t.userGroupId && !t.locked) {
-        stats[t.userGroupId] = (stats[t.userGroupId] || 0) + t.itemCount;
-      }
-    });
-    return userGroups
-      .map((g) => ({ ...g, count: stats[g.id] }))
-      .filter((g) => g.count > 0)
-      .sort((a, b) => b.count - a.count);
+    userGroups.forEach(g => stats[g.id] = 0);
+    tiles.forEach(t => { if (t.userGroupId && !t.locked && !t.hidden) stats[t.userGroupId] += t.itemCount; });
+    return userGroups.map(g => ({ ...g, count: stats[g.id] })).filter(g => g.count > 0).sort((a, b) => b.lastUpdated - a.lastUpdated);
   }, [tiles, userGroups]);
-
-  const copyRoomLink = () => {
-    const link = `${window.location.origin}/?room=${roomCode}`;
-    navigator.clipboard.writeText(link);
-    setToast({ open: true, message: 'Room link copied to clipboard!', severity: 'info' });
-  };
 
   const renderGame = () => (
     <Box display="flex" height="100vh" p={2} gap={2}>
       {isPlaying && roomCode && tiles.length === 0 ? (
-        <Box flex={3} display="flex" alignItems="center" justifyContent="center">
-          <Typography variant="h5">Syncing with room {roomCode}...</Typography>
-        </Box>
+        <Box flex={3} display="flex" alignItems="center" justifyContent="center"><Typography variant="h5">Syncing with room {roomCode}...</Typography></Box>
       ) : (
         <Box flex={3} display="flex" flexDirection="column" sx={{ overflowY: 'auto' }}>
           <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -628,262 +469,113 @@ function GameContent() {
             {roomCode && (
               <Box display="flex" alignItems="center" gap={1}>
                 <Typography variant="h6" color="primary">Room: {roomCode}</Typography>
-                <Tooltip title="Copy Invite Link">
-                  <IconButton size="small" onClick={copyRoomLink}>
-                    <ContentCopyIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
+                <IconButton size="small" onClick={copyRoomLink}><ContentCopyIcon fontSize="small" /></IconButton>
               </Box>
             )}
           </Box>
-          
-          {completedCategories.length > 0 && (
-            <Box mb={2}>
-              {completedCategories.map((cat) => (
-                <Paper key={cat} sx={{ p: 2, mb: 1, backgroundColor: '#d4edda', textAlign: 'center' }}>
-                  <Typography variant="h6">{cat}</Typography>
-                  <Typography variant="body2">
-                    {tiles.filter(t => t.realCategory === cat).map(t => t.text).join(', ')}
-                  </Typography>
-                </Paper>
-              ))}
-            </Box>
-          )}
-
+          {completedCategories.map(cat => (
+            <Paper key={cat} sx={{ p: 2, mb: 1, backgroundColor: '#d4edda', textAlign: 'center' }}>
+              <Typography variant="h6">{cat}</Typography>
+              <Typography variant="body2">{tiles.filter(t => t.realCategory === cat).map(t => t.text).join(', ')}</Typography>
+            </Paper>
+          ))}
           <Box sx={{ flexGrow: 1, overflowX: 'auto', pb: 2 }}>
-            <Box
-              display="grid"
-              gap={1}
-              gridTemplateColumns={`repeat(${tilesPerRow}, minmax(100px, 1fr))`}
-              sx={{ minWidth: 'min-content' }}
-            >
+            <Box display="grid" gap={1} gridTemplateColumns={`repeat(${tilesPerRow}, minmax(100px, 1fr))`} sx={{ minWidth: 'min-content' }}>
               {tiles.filter(t => !t.locked).map((tile) => {
-                if (tile.hidden) {
-                  return <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} />;
-                }
-                const group = userGroups.find((g) => g.id === tile.userGroupId);
-                const isSelected = selectedTile?.id === tile.id;
-                return (
-                  <TileComponent
-                    key={tile.id}
-                    tile={tile}
-                    group={group}
-                    gridSize={gridSize}
-                    isSelected={isSelected}
-                    onMenuOpen={handleMenuOpen}
-                    onTileClick={handleTileClick}
-                    onDragStart={handleDragStart}
-                    onDragOver={handleDragOver}
-                    onDrop={handleDrop}
-                  />
-                );
+                if (tile.hidden) return <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} />;
+                return <TileComponent key={tile.id} tile={tile} group={userGroups.find(g => g.id === tile.userGroupId)} gridSize={gridSize} isSelected={selectedTile?.id === tile.id} onMenuOpen={handleMenuOpen} onTileClick={handleTileClick} onDragStart={handleDragStart} onDragOver={handleDragOver} onDrop={handleDrop} />;
               })}
             </Box>
           </Box>
         </Box>
       )}
-
-      {sidebarExpanded ? (
-        <Paper sx={{ flex: 1, minWidth: '300px', maxWidth: '350px', p: 2, display: 'flex', flexDirection: 'column', position: 'relative' }}>
-          <IconButton 
-            size="small" 
-            onClick={() => setSidebarExpanded(false)}
-            sx={{ position: 'absolute', top: 8, right: 8 }}
-          >
-            <ChevronRightIcon />
-          </IconButton>
-          <Typography variant="h6">Score & Progress</Typography>
-          <Typography variant="body1">Score: {score} ({Math.round((score / (gridSize * (gridSize - 1))) * 100)}%)</Typography>
-          <Typography variant="body1">Mistakes: {mistakes}</Typography>
-          <Typography variant="body1">
-            Completed: {completedCategories.length} / {gridSize}
-          </Typography>
-        
+      <Paper sx={{ display: sidebarExpanded ? 'flex' : 'none', flex: 1, minWidth: '300px', maxWidth: '350px', p: 2, flexDirection: 'column', position: 'relative' }}>
+        <IconButton size="small" onClick={() => setSidebarExpanded(false)} sx={{ position: 'absolute', top: 8, right: 8 }}><ChevronRightIcon /></IconButton>
+        <Typography variant="h6">Score & Progress</Typography>
+        <Typography variant="body1">Score: {score} ({gridSize > 1 ? Math.round((score / (gridSize * (gridSize - 1))) * 100) : 0}%)</Typography>
+        <Typography variant="body1">Mistakes: {mistakes}</Typography>
+        <Typography variant="body1">Completed: {completedCategories.length} / {gridSize}</Typography>
         <Divider sx={{ my: 2 }} />
-
         <Box mb={2}>
-          <Box 
-            display="flex" 
-            justifyContent="space-between" 
-            alignItems="center" 
-            sx={{ cursor: 'pointer' }}
-            onClick={() => setSettingsExpanded(!settingsExpanded)}
-          >
+          <Box display="flex" justifyContent="space-between" alignItems="center" sx={{ cursor: 'pointer' }} onClick={() => setSettingsExpanded(!settingsExpanded)}>
             <Typography variant="h6">Settings</Typography>
             {settingsExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
           </Box>
           <Collapse in={settingsExpanded}>
             <Box mt={2}>
-              <Typography id="tiles-per-row-slider" gutterBottom>
-                Items per Row: {tilesPerRow}
-              </Typography>
-              <Slider
-                value={tilesPerRow}
-                min={2}
-                max={50}
-                onChange={(e, val) => setTilesPerRow(val as number)}
-                aria-labelledby="tiles-per-row-slider"
-              />
-              <FormControlLabel
-                control={
-                  <Switch 
-                    checked={autoRefill} 
-                    onChange={(e) => setAutoRefill(e.target.checked)} 
-                  />
-                }
-                label="Auto-Refill Rows"
-              />
-              <Button 
-                variant="outlined" 
-                size="small" 
-                fullWidth 
-                sx={{ mt: 1 }}
-                onClick={() => {
-                   setTiles((prev) => {
-                      const unlocked = prev.filter(t => !t.locked && !t.hidden);
-                      const locked = prev.filter(t => t.locked);
-                      return [...unlocked, ...locked];
-                   });
-                }}
-              >
-                Refill Board
-              </Button>
-              <Button 
-                variant="contained" 
-                color="error"
-                size="small" 
-                fullWidth 
-                sx={{ mt: 2 }}
-                onClick={() => {
-                   if (confirm("Are you sure you want to quit? Your current game progress will be lost forever.")) {
-                       localStorage.removeItem('superConnectionsState');
-                       setIsPlaying(false);
-                       setRoomCode(null);
-                       router.push('/');
-                   }
-                }}
-              >
-                Quit Game
-              </Button>
+              <Typography gutterBottom>Items per Row: {tilesPerRow}</Typography>
+              <Slider value={tilesPerRow} min={2} max={50} onChange={(e, val) => {
+                const newRows = val as number;
+                if (roomCode) sendAction('UPDATE_SETTINGS', { tilesPerRow: newRows });
+                else setTilesPerRow(newRows);
+              }} />
+              <FormControlLabel control={<Switch checked={autoRefill} onChange={(e) => {
+                const newRefill = e.target.checked;
+                if (roomCode) sendAction('UPDATE_SETTINGS', { autoRefill: newRefill });
+                else setAutoRefill(newRefill);
+              }} />} label="Auto-Refill Rows" />
+              <Button variant="outlined" size="small" fullWidth sx={{ mt: 1 }} onClick={() => {
+                if (roomCode) sendAction('REFILL_BOARD');
+                else setTiles(prev => { const u = prev.filter(t => !t.locked && !t.hidden); const l = prev.filter(t => t.locked); return [...u, ...l]; });
+              }}>Refill Board</Button>
+              {isHost && (
+                <Button variant="contained" color="error" size="small" fullWidth sx={{ mt: 2 }} onClick={() => {
+                  if (confirm("Are you sure you want to quit?")) {
+                    localStorage.removeItem('superConnectionsState');
+                    setIsPlaying(false);
+                    setRoomCode(null);
+                    router.push('/');
+                  }
+                }}>Quit Game</Button>
+              )}
             </Box>
           </Collapse>
         </Box>
-
         <Divider sx={{ mb: 2 }} />
-        
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
-          <Typography variant="h6">Your Groups</Typography>
-          <Button startIcon={<AddCircleIcon />} size="small" onClick={() => createNewGroup()}>New</Button>
-        </Box>
-
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}><Typography variant="h6">Your Groups</Typography><Button startIcon={<AddCircleIcon />} size="small" onClick={createNewGroup}>New</Button></Box>
         <Box flex={1} sx={{ overflowY: 'auto' }}>
-          {groupStats.map((group) => (
-            <Paper
-              key={group.id}
-              sx={{ p: 1, mb: 1, backgroundColor: group.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-            >
-              <Box>
-                <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{group.name}</Typography>
-                <Typography variant="caption">{group.count} / {gridSize} items</Typography>
-              </Box>
+          {groupStats.map(group => (
+            <Paper key={group.id} sx={{ p: 1, mb: 1, backgroundColor: group.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Box><Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{group.name}</Typography><Typography variant="caption">{group.count} / {gridSize} items</Typography></Box>
               <Button size="small" onClick={() => openRenameDialog(group.id, group.name)}>Rename</Button>
             </Paper>
           ))}
-          {groupStats.length === 0 && (
-            <Typography variant="body2" color="textSecondary">No groups created yet. Click the tag icon on a tile to start grouping!</Typography>
-          )}
         </Box>
       </Paper>
-      ) : (
+      {!sidebarExpanded && (
         <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 100 }}>
           <Paper sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255, 255, 255, 0.95)', boxShadow: 3 }}>
             <Box display="flex" gap={2}>
               <Typography variant="body2" fontWeight="bold">Score: {score}</Typography>
               <Typography variant="body2" color="error">Mistakes: {mistakes}</Typography>
-              <Typography variant="body2" color="primary">Progress: {Math.round((score / (gridSize * (gridSize - 1))) * 100)}%</Typography>
+              <Typography variant="body2" color="primary">Progress: {gridSize > 1 ? Math.round((score / (gridSize * (gridSize - 1))) * 100) : 0}%</Typography>
             </Box>
-            <IconButton size="small" onClick={() => setSidebarExpanded(true)}>
-              <MenuIcon />
-            </IconButton>
+            <IconButton size="small" onClick={() => setSidebarExpanded(true)}><MenuIcon /></IconButton>
           </Paper>
         </Box>
       )}
-
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-      >
-        <MenuItem onClick={createNewGroup}>
-          <ListItemIcon><AddCircleIcon fontSize="small" /></ListItemIcon>
-          <ListItemText>Create New Group</ListItemText>
-        </MenuItem>
+      <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={handleMenuClose}>
+        <MenuItem onClick={createNewGroup}><ListItemIcon><AddCircleIcon fontSize="small" /></ListItemIcon><ListItemText>Create New Group</ListItemText></MenuItem>
         <Divider />
-        <MenuItem onClick={() => assignGroupToTile(activeTileId!, null)}>
-          <ListItemText>Remove Group</ListItemText>
-        </MenuItem>
-        {userGroups
-          .slice()
-          .sort((a, b) => b.lastUpdated - a.lastUpdated)
-          .map((group) => {
-            const currentCount = tiles.reduce((acc, t) => {
-               if (t.userGroupId === group.id && !t.locked && !t.hidden) return acc + t.itemCount;
-               return acc;
-            }, 0);
-            if (currentCount === 0) return null;
-            
-            return (
-              <MenuItem key={group.id} onClick={() => assignGroupToTile(activeTileId!, group.id)}>
-                <Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: group.color, mr: 1, border: '1px solid #000' }} />
-                <ListItemText>{group.name} ({currentCount})</ListItemText>
-              </MenuItem>
-            );
+        <MenuItem onClick={() => assignGroupToTile(activeTileId!, null)}><ListItemText>Remove Group</ListItemText></MenuItem>
+        {userGroups.slice().sort((a, b) => b.lastUpdated - a.lastUpdated).map(group => {
+          const count = tiles.reduce((acc, t) => (t.userGroupId === group.id && !t.locked && !t.hidden) ? acc + t.itemCount : acc, 0);
+          if (count === 0) return null;
+          return <MenuItem key={group.id} onClick={() => assignGroupToTile(activeTileId!, group.id)}><Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: group.color, mr: 1, border: '1px solid #000' }} /><ListItemText>{group.name} ({count})</ListItemText></MenuItem>;
         })}
       </Menu>
-
       <Dialog open={renameDialogOpen} onClose={() => setRenameDialogOpen(false)}>
         <DialogTitle>Rename Group</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Group Name"
-            fullWidth
-            variant="standard"
-            value={newGroupName}
-            onChange={(e) => setNewGroupName(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRenameDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handleRenameSubmit}>Save</Button>
-        </DialogActions>
+        <DialogContent><TextField autoFocus margin="dense" label="Group Name" fullWidth variant="standard" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} /></DialogContent>
+        <DialogActions><Button onClick={() => setRenameDialogOpen(false)}>Cancel</Button><Button onClick={handleRenameSubmit}>Save</Button></DialogActions>
       </Dialog>
-
-      <Snackbar
-        open={toast.open}
-        autoHideDuration={4000}
-        onClose={() => setToast({ ...toast, open: false })}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert severity={toast.severity} sx={{ width: '100%' }}>
-          {toast.message}
-        </Alert>
-      </Snackbar>
+      <Snackbar open={toast.open} autoHideDuration={4000} onClose={() => setToast({ ...toast, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}><Alert severity={toast.severity} sx={{ width: '100%' }}>{toast.message}</Alert></Snackbar>
     </Box>
   );
 
-  return (
-    <Container maxWidth={false} disableGutters>
-      {!isPlaying ? renderSetup() : renderGame()}
-    </Container>
-  );
+  return <Container maxWidth={false} disableGutters>{!isPlaying ? renderSetup() : renderGame()}</Container>;
 }
 
 export default function Game() {
-  return (
-    <Suspense fallback={<div>Loading...</div>}>
-      <GameContent />
-    </Suspense>
-  );
+  return <Suspense fallback={<div>Loading...</div>}><GameContent /></Suspense>;
 }

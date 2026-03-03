@@ -3,13 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import io from 'socket.io-client';
 
-export function useSocket(roomCode: string | null, onStateUpdate: (state: any, version: number) => void, getLatestState?: () => any) {
+export function useSocket(roomCode: string | null, onStateUpdate: (state: any) => void, getLatestState?: () => any) {
   const socketRef = useRef<any>(null);
   const [isHost, setIsHost] = useState(false);
-  const versionRef = useRef(0);
   const getLatestStateRef = useRef(getLatestState);
 
-  // Update the ref so the socket always has access to the most recent state getter
   useEffect(() => {
     getLatestStateRef.current = getLatestState;
   }, [getLatestState]);
@@ -17,7 +15,6 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any, v
   useEffect(() => {
     if (!roomCode) {
       setIsHost(false);
-      versionRef.current = 0;
       return;
     }
 
@@ -29,33 +26,16 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any, v
       const state = getLatestStateRef.current ? getLatestStateRef.current() : null;
       socket.emit('join_room', { 
         code: roomCode, 
-        gameState: (state && state.tiles && state.tiles.length > 0) ? state : null 
+        initialGameState: (state && state.tiles && state.tiles.length > 0) ? state : null 
       });
     });
 
-    socket.on('init_session', (data: { isHost: boolean, userId: string, version: number }) => {
-      console.log(`Session initialized. IsHost: ${data.isHost}, ServerVersion: ${data.version}`);
+    socket.on('init_session', (data: { isHost: boolean, userId: string }) => {
       setIsHost(data.isHost);
-      // Don't set versionRef here so we accept the first state_update
     });
 
-    socket.on('request_state', () => {
-      console.log('Server requested latest state');
-      const state = getLatestStateRef.current ? getLatestStateRef.current() : null;
-      if (state && state.tiles && state.tiles.length > 0) {
-        const newVersion = Date.now();
-        versionRef.current = newVersion;
-        console.log(`Host broadcasting state v${newVersion}`);
-        socket.emit('update_state', { code: roomCode, gameState: state, version: newVersion });
-      }
-    });
-
-    socket.on('state_update', (data: { gameState: any, version: number }) => {
-      console.log(`Received state update v${data.version} (current v${versionRef.current})`);
-      if (data && data.version >= versionRef.current) {
-        versionRef.current = data.version;
-        onStateUpdate(data.gameState, data.version);
-      }
+    socket.on('state_update', (newState: any) => {
+      onStateUpdate(newState);
     });
 
     return () => {
@@ -64,18 +44,14 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any, v
     };
   }, [roomCode, onStateUpdate]);
 
-  const updateServerState = useCallback((gameState: any) => {
+  const sendAction = useCallback((type: string, payload: any = {}) => {
     if (socketRef.current && roomCode) {
-      if (gameState.tiles && gameState.tiles.length > 0) {
-        const newVersion = Date.now();
-        // Only update locally if the version we are sending is actually newer
-        if (newVersion > versionRef.current) {
-          versionRef.current = newVersion;
-          socketRef.current.emit('update_state', { code: roomCode, gameState, version: newVersion });
-        }
-      }
+      socketRef.current.emit('game_action', { 
+        code: roomCode, 
+        action: { type, payload } 
+      });
     }
   }, [roomCode]);
 
-  return { updateServerState, isHost };
+  return { sendAction, isHost };
 }
