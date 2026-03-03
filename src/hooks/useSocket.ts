@@ -34,8 +34,9 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any, v
     });
 
     socket.on('init_session', (data: { isHost: boolean, userId: string, version: number }) => {
+      console.log(`Session initialized. IsHost: ${data.isHost}, ServerVersion: ${data.version}`);
       setIsHost(data.isHost);
-      versionRef.current = data.version || 0;
+      // Don't set versionRef here so we accept the first state_update
     });
 
     socket.on('request_state', () => {
@@ -44,12 +45,14 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any, v
       if (state && state.tiles && state.tiles.length > 0) {
         const newVersion = Date.now();
         versionRef.current = newVersion;
+        console.log(`Host broadcasting state v${newVersion}`);
         socket.emit('update_state', { code: roomCode, gameState: state, version: newVersion });
       }
     });
 
     socket.on('state_update', (data: { gameState: any, version: number }) => {
-      if (data && data.version > versionRef.current) {
+      console.log(`Received state update v${data.version} (current v${versionRef.current})`);
+      if (data && data.version >= versionRef.current) {
         versionRef.current = data.version;
         onStateUpdate(data.gameState, data.version);
       }
