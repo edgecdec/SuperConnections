@@ -166,40 +166,8 @@ function GameContent() {
   const isRemoteUpdate = useRef(false);
   const hasJoined = useRef(false);
 
-  // Auto-join room from URL or load from LocalStorage
-  useEffect(() => {
-    if (roomCodeFromUrl) {
-      setRoomCode(roomCodeFromUrl);
-      setIsPlaying(true);
-      return;
-    }
-
-    try {
-      const saved = localStorage.getItem('superConnectionsState');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.isPlaying) {
-          isRemoteUpdate.current = true;
-          setGridSize(parsed.gridSize || 4);
-          setIsPlaying(parsed.isPlaying);
-          setTiles(parsed.tiles || []);
-          setUserGroups(parsed.userGroups || []);
-          setCompletedCategories(parsed.completedCategories || []);
-          setMistakes(parsed.mistakes || 0);
-          setScore(parsed.score || 0);
-          if (parsed.tilesPerRow) setTilesPerRow(parsed.tilesPerRow);
-          if (parsed.autoRefill !== undefined) setAutoRefill(parsed.autoRefill);
-          setTimeout(() => {
-            isRemoteUpdate.current = false;
-          }, 100);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to load state', e);
-    }
-  }, [roomCodeFromUrl]);
-
   const getGameState = useCallback(() => ({
+    roomCode,
     gridSize,
     tiles,
     userGroups,
@@ -208,7 +176,50 @@ function GameContent() {
     score,
     tilesPerRow,
     autoRefill
-  }), [gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill]);
+  }), [roomCode, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill]);
+
+  // Load state from local storage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('superConnectionsState');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.isPlaying) {
+          // If we have a room code in URL, only load local state if it matches the room code
+          if (roomCodeFromUrl && parsed.roomCode !== roomCodeFromUrl) {
+            setRoomCode(roomCodeFromUrl);
+            setIsPlaying(true);
+            return;
+          }
+
+          isRemoteUpdate.current = true;
+          setGridSize(parsed.gridSize || 4);
+          setIsPlaying(parsed.isPlaying);
+          setTiles(parsed.tiles || []);
+          setUserGroups(parsed.userGroups || []);
+          setCompletedCategories(parsed.completedCategories || []);
+          setMistakes(parsed.mistakes || 0);
+          setScore(parsed.score || 0);
+          setRoomCode(parsed.roomCode || null);
+          if (parsed.tilesPerRow) setTilesPerRow(parsed.tilesPerRow);
+          if (parsed.autoRefill !== undefined) setAutoRefill(parsed.autoRefill);
+          
+          setTimeout(() => {
+            isRemoteUpdate.current = false;
+          }, 200);
+        }
+      } else if (roomCodeFromUrl) {
+        setRoomCode(roomCodeFromUrl);
+        setIsPlaying(true);
+      }
+    } catch (e) {
+      console.error('Failed to load state', e);
+      if (roomCodeFromUrl) {
+        setRoomCode(roomCodeFromUrl);
+        setIsPlaying(true);
+      }
+    }
+  }, [roomCodeFromUrl]);
 
   const handleSocketUpdate = useCallback((newState: any, version: number) => {
     if (!newState || !newState.tiles || newState.tiles.length === 0) return;
