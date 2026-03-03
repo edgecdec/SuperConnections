@@ -187,21 +187,31 @@ function GameContent() {
 
   const { updateServerState, isHost } = useSocket(roomCode, handleSocketUpdate);
 
+  const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const syncState = useCallback(() => {
     // Only sync if we are the host OR if we have already successfully joined and synced with the server once
     const canSync = isHost || hasJoined.current;
 
     if (roomCode && !isRemoteUpdate.current && tiles.length > 0 && canSync) {
-      updateServerState({
-        gridSize,
-        tiles,
-        userGroups,
-        completedCategories,
-        mistakes,
-        score,
-        tilesPerRow,
-        autoRefill
-      });
+      // Clear any pending sync
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+
+      // Debounce the sync to once every 500ms
+      syncTimeoutRef.current = setTimeout(() => {
+        updateServerState({
+          gridSize,
+          tiles,
+          userGroups,
+          completedCategories,
+          mistakes,
+          score,
+          tilesPerRow,
+          autoRefill
+        });
+      }, 500);
     }
   }, [roomCode, updateServerState, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill, isHost]);
 
