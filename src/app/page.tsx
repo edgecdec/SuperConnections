@@ -194,12 +194,20 @@ function GameContent() {
     const canSync = isHost || hasJoined.current;
 
     if (roomCode && !isRemoteUpdate.current && tiles.length > 0 && canSync) {
+      // Validate that the state we are about to send is actually valid
+      // A valid board MUST have a total item count equal to gridSize * gridSize
+      const totalItems = tiles.reduce((acc, t) => acc + t.itemCount, 0);
+      if (totalItems !== gridSize * gridSize) {
+        console.warn(`Sync blocked: Board is incomplete (${totalItems}/${gridSize * gridSize} items)`);
+        return;
+      }
+
       // Clear any pending sync
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
 
-      // Debounce the sync to once every 500ms
+      // Debounce the sync to once every 1000ms
       syncTimeoutRef.current = setTimeout(() => {
         updateServerState({
           gridSize,
@@ -211,7 +219,7 @@ function GameContent() {
           tilesPerRow,
           autoRefill
         });
-      }, 500);
+      }, 1000);
     }
   }, [roomCode, updateServerState, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill, isHost]);
 
