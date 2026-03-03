@@ -164,10 +164,12 @@ function GameContent() {
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(true);
 
   const isRemoteUpdate = useRef(false);
+  const hasJoined = useRef(false);
 
   const handleSocketUpdate = useCallback((newState: any) => {
     if (!newState) return;
     isRemoteUpdate.current = true;
+    hasJoined.current = true;
     setGridSize(newState.gridSize);
     setTiles(newState.tiles);
     setUserGroups(newState.userGroups);
@@ -186,7 +188,10 @@ function GameContent() {
   const { updateServerState, isHost } = useSocket(roomCode, handleSocketUpdate);
 
   const syncState = useCallback(() => {
-    if (roomCode && !isRemoteUpdate.current && tiles.length > 0) {
+    // Only sync if we are the host OR if we have already successfully joined and synced with the server once
+    const canSync = isHost || hasJoined.current;
+
+    if (roomCode && !isRemoteUpdate.current && tiles.length > 0 && canSync) {
       updateServerState({
         gridSize,
         tiles,
@@ -198,7 +203,7 @@ function GameContent() {
         autoRefill
       });
     }
-  }, [roomCode, updateServerState, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill]);
+  }, [roomCode, updateServerState, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill, isHost]);
 
   // Load state from local storage on mount
   useEffect(() => {
