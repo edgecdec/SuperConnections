@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback, Suspense } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, Suspense, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Container,
@@ -163,8 +163,11 @@ function GameContent() {
   const [settingsExpanded, setSettingsExpanded] = useState<boolean>(false);
   const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(true);
 
+  const isRemoteUpdate = useRef(false);
+
   const handleSocketUpdate = useCallback((newState: any) => {
     if (!newState) return;
+    isRemoteUpdate.current = true;
     setGridSize(newState.gridSize);
     setTiles(newState.tiles);
     setUserGroups(newState.userGroups);
@@ -174,12 +177,16 @@ function GameContent() {
     setTilesPerRow(newState.tilesPerRow);
     setAutoRefill(newState.autoRefill);
     setIsPlaying(true);
+    // Use a small timeout to allow React to process state updates before clearing the flag
+    setTimeout(() => {
+      isRemoteUpdate.current = false;
+    }, 100);
   }, []);
 
   const { updateServerState, isHost } = useSocket(roomCode, handleSocketUpdate);
 
   const syncState = useCallback(() => {
-    if (roomCode) {
+    if (roomCode && !isRemoteUpdate.current && tiles.length > 0) {
       updateServerState({
         gridSize,
         tiles,
@@ -201,6 +208,7 @@ function GameContent() {
       if (saved) {
         const parsed = JSON.parse(saved);
         if (parsed.isPlaying) {
+          isRemoteUpdate.current = true;
           setGridSize(parsed.gridSize || 4);
           setIsPlaying(parsed.isPlaying);
           setTiles(parsed.tiles || []);
@@ -210,6 +218,9 @@ function GameContent() {
           setScore(parsed.score || 0);
           if (parsed.tilesPerRow) setTilesPerRow(parsed.tilesPerRow);
           if (parsed.autoRefill !== undefined) setAutoRefill(parsed.autoRefill);
+          setTimeout(() => {
+            isRemoteUpdate.current = false;
+          }, 100);
         }
       }
     } catch (e) {
@@ -219,6 +230,8 @@ function GameContent() {
 
   // Save state to local storage when it changes
   useEffect(() => {
+    if (isRemoteUpdate.current) return;
+
     if (isPlaying) {
       const stateToSave = {
         gridSize,

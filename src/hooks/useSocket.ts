@@ -33,7 +33,10 @@ export function useSocket(roomCode: string | null, onStateUpdate: (state: any) =
 
   const updateServerState = useCallback((gameState: any) => {
     if (socketRef.current && roomCode) {
-      socketRef.current.emit('update_state', { code: roomCode, gameState });
+      // Ensure we don't send an empty state if we're in a room
+      if (gameState.tiles && gameState.tiles.length > 0) {
+        socketRef.current.emit('update_state', { code: roomCode, gameState });
+      }
     }
   }, [roomCode]);
 
