@@ -1,0 +1,19 @@
+node_modules/
+.next/
+out/
+build/
+.env*.local
+.vercel
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temp files
+2025.html
+categories.csv
+new_categories.csv
+new_categories_sorted.csv
+sort_categories.js
+reorder_data.js
+csv_to_json.js
+fix_csv.js
