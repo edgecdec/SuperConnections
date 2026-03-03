@@ -91,7 +91,20 @@ app.prepare().then(() => {
            version: rooms[roomCode].version
        });
 
-       // If room exists, send current state to the joining user
+       // Priority 1: If joining user is the host and provided a state, use it as the new source of truth
+       if (rooms[roomCode].hostId === userId && gameState && gameState.tiles && gameState.tiles.length > 0) {
+           console.log(`Host ${userId} re-joined and provided state for room ${roomCode}. Updating server.`);
+           rooms[roomCode].state = gameState;
+           rooms[roomCode].version = Date.now();
+           // Broadcast to others, but not back to the host who just sent it
+           socket.to(roomCode).emit('state_update', { 
+               gameState: gameState, 
+               version: rooms[roomCode].version 
+           });
+           return; // Skip sending old server state back to host
+       }
+
+       // Priority 2: If room has a state, send it to the joining user
        if (rooms[roomCode].state) {
            console.log(`Sending state to joiner ${userId} in room ${roomCode} (v\${rooms[roomCode].version})`);
            socket.emit('state_update', { 
@@ -100,19 +113,7 @@ app.prepare().then(() => {
            });
        } else {
            console.log(`Joiner ${userId} entered room ${roomCode} but state is empty. Requesting from host.`);
-           // Tell the room (host) to broadcast its state
            io.to(roomCode).emit('request_state');
-       }
-
-       // If joining user is the host and provided a state, update it
-       if (rooms[roomCode].hostId === userId && gameState && gameState.tiles && gameState.tiles.length > 0) {
-           console.log(`Host ${userId} provided initial state for room ${roomCode}`);
-           rooms[roomCode].state = gameState;
-           rooms[roomCode].version = Date.now();
-           socket.to(roomCode).emit('state_update', { 
-               gameState: gameState, 
-               version: rooms[roomCode].version 
-           });
        }
     });
 

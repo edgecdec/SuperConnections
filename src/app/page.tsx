@@ -269,31 +269,22 @@ function GameContent() {
     }
   }, [roomCode, updateServerState, gridSize, tiles, getGameState, isHost]);
 
-  // Save state to local storage when it changes
+  // Save state to local storage and sync to server
   useEffect(() => {
     if (isRemoteUpdate.current) return;
 
     if (isPlaying) {
-      const stateToSave = {
-        gridSize,
-        isPlaying,
-        tiles,
-        userGroups,
-        completedCategories,
-        mistakes,
-        score,
-        tilesPerRow,
-        autoRefill
-      };
-      if (!roomCode) {
-        localStorage.setItem('superConnectionsState', JSON.stringify(stateToSave));
-      } else {
+      const currentState = getGameState();
+      // Always save a local backup
+      localStorage.setItem('superConnectionsState', JSON.stringify(currentState));
+      
+      if (roomCode) {
         syncState();
       }
     } else if (!roomCode) {
       localStorage.removeItem('superConnectionsState');
     }
-  }, [gridSize, isPlaying, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill, roomCode, syncState]);
+  }, [isPlaying, roomCode, getGameState, syncState]);
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [activeTileId, setActiveTileId] = useState<string | null>(null);
@@ -347,6 +338,7 @@ function GameContent() {
     setMistakes(0);
     setScore(0);
     setIsPlaying(true);
+    hasJoined.current = true; // Host is always "joined" to their own data
 
     if (multiplayer) {
       const newRoomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
