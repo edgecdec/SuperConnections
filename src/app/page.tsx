@@ -547,8 +547,11 @@ function GameContent() {
         <TextField
           type="number"
           label="Grid Size"
-          value={gridSize}
-          onChange={(e) => setGridSize(parseInt(e.target.value, 10))}
+          value={isNaN(gridSize) ? '' : gridSize}
+          onChange={(e) => {
+            const val = parseInt(e.target.value, 10);
+            setGridSize(val);
+          }}
           inputProps={{ min: 2, max: 50 }}
         />
         <Button variant="contained" size="large" onClick={() => handleStart(false)}>
