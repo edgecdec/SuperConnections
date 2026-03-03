@@ -101,7 +101,7 @@ app.prepare().then(() => {
        } else {
            console.log(`Joiner ${userId} entered room ${roomCode} but state is empty. Requesting from host.`);
            // Tell the room (host) to broadcast its state
-           socket.to(roomCode).emit('request_state');
+           io.to(roomCode).emit('request_state');
        }
 
        // If joining user is the host and provided a state, update it
