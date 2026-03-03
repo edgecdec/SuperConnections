@@ -93,14 +93,20 @@ app.prepare().then(() => {
 
        // If room exists, send current state to the joining user
        if (rooms[roomCode].state) {
+           console.log(`Sending state to joiner ${userId} in room ${roomCode} (v\${rooms[roomCode].version})`);
            socket.emit('state_update', { 
                gameState: rooms[roomCode].state, 
                version: rooms[roomCode].version 
            });
+       } else {
+           console.log(`Joiner ${userId} entered room ${roomCode} but state is empty. Requesting from host.`);
+           // Tell the room (host) to broadcast its state
+           socket.to(roomCode).emit('request_state');
        }
 
        // If joining user is the host and provided a state, update it
-       if (rooms[roomCode].hostId === userId && gameState) {
+       if (rooms[roomCode].hostId === userId && gameState && gameState.tiles && gameState.tiles.length > 0) {
+           console.log(`Host ${userId} provided initial state for room ${roomCode}`);
            rooms[roomCode].state = gameState;
            rooms[roomCode].version = Date.now();
            socket.to(roomCode).emit('state_update', { 
@@ -114,6 +120,12 @@ app.prepare().then(() => {
         if (!code || !rooms[code.toUpperCase()]) return;
         const roomCode = code.toUpperCase();
         
+        // Safety check: Don't allow wiping the board with empty updates
+        if (!gameState || !gameState.tiles || gameState.tiles.length === 0) {
+            console.warn(`Blocked empty state update from user in room ${roomCode}`);
+            return;
+        }
+
         // Only accept the update if the version is newer than what we have
         if (version && version > rooms[roomCode].version) {
             rooms[roomCode].state = gameState;

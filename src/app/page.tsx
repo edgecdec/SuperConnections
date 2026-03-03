@@ -199,6 +199,17 @@ function GameContent() {
     }
   }, [roomCodeFromUrl]);
 
+  const getGameState = useCallback(() => ({
+    gridSize,
+    tiles,
+    userGroups,
+    completedCategories,
+    mistakes,
+    score,
+    tilesPerRow,
+    autoRefill
+  }), [gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill]);
+
   const handleSocketUpdate = useCallback((newState: any, version: number) => {
     if (!newState || !newState.tiles || newState.tiles.length === 0) return;
     
@@ -220,43 +231,28 @@ function GameContent() {
     }, 200);
   }, []);
 
-  const { updateServerState, isHost } = useSocket(roomCode, handleSocketUpdate);
+  const { updateServerState, isHost } = useSocket(roomCode, handleSocketUpdate, getGameState);
 
   const syncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const syncState = useCallback(() => {
-    // Only sync if we are the host OR if we have already successfully joined and synced with the server once
     const canSync = isHost || hasJoined.current;
 
     if (roomCode && !isRemoteUpdate.current && tiles.length > 0 && canSync) {
-      // Validate that the state we are about to send is actually valid
-      // A valid board MUST have a total item count equal to gridSize * gridSize
       const totalItems = tiles.reduce((acc, t) => acc + t.itemCount, 0);
       if (totalItems !== gridSize * gridSize) {
-        console.warn(`Sync blocked: Board is incomplete (${totalItems}/${gridSize * gridSize} items)`);
         return;
       }
 
-      // Clear any pending sync
       if (syncTimeoutRef.current) {
         clearTimeout(syncTimeoutRef.current);
       }
 
-      // Debounce the sync to once every 1000ms
       syncTimeoutRef.current = setTimeout(() => {
-        updateServerState({
-          gridSize,
-          tiles,
-          userGroups,
-          completedCategories,
-          mistakes,
-          score,
-          tilesPerRow,
-          autoRefill
-        });
+        updateServerState(getGameState());
       }, 1000);
     }
-  }, [roomCode, updateServerState, gridSize, tiles, userGroups, completedCategories, mistakes, score, tilesPerRow, autoRefill, isHost]);
+  }, [roomCode, updateServerState, gridSize, tiles, getGameState, isHost]);
 
   // Save state to local storage when it changes
   useEffect(() => {
