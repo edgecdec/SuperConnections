@@ -578,10 +578,10 @@ function GameContent() {
         <TextField
           type="number"
           label="Grid Size"
-          value={isNaN(gridSize) ? '' : gridSize}
+          value={gridSize || ''}
           onChange={(e) => {
             const val = parseInt(e.target.value, 10);
-            setGridSize(val);
+            setGridSize(isNaN(val) ? 0 : val);
           }}
           inputProps={{ min: 2, max: 50 }}
         />
