@@ -34,31 +34,51 @@ export function useGameLogic(initialRoomCode: string | null) {
     switch (action.type) {
       case 'MERGE_TILES': {
         const { tile1Id, tile2Id } = action.payload;
+        // tile1Id is the survivor, tile2Id is being merged/hidden
         const t1 = next.tiles.find(t => t.id === tile1Id);
         const t2 = next.tiles.find(t => t.id === tile2Id);
-        if (t1 && t2 && t1.realCategory === t2.realCategory) {
+        
+        if (t1 && t2 && t1.id !== t2.id && t1.realCategory === t2.realCategory) {
           next.score = prevState.score + 1;
           let targetId = t1.userGroupId || t2.userGroupId;
           
-          const newUserGroups = [...prevState.userGroups];
           if (!targetId) {
             targetId = Math.random().toString(36).substring(2, 9);
-            newUserGroups.push({ 
+            next.userGroups = [...prevState.userGroups, { 
               id: targetId, 
-              name: `Group ${newUserGroups.length + 1}`, 
+              name: `Group ${prevState.userGroups.length + 1}`, 
               color: action.payload.newGroupColor, 
               lastUpdated: Date.now() 
-            });
+            }];
+          } else {
+            next.userGroups = prevState.userGroups.map(g => 
+              g.id === targetId ? { ...g, lastUpdated: Date.now() } : g
+            );
           }
-          next.userGroups = newUserGroups;
+
+          const t1OldGroupId = t1.userGroupId;
+          const t2OldGroupId = t2.userGroupId;
 
           next.tiles = prevState.tiles.map(t => {
-            if (t.id === tile2Id) return { ...t, hidden: true };
-            if (t.id === tile1Id) return { ...t, text: t.text + ', ' + t2.text, userGroupId: targetId, itemCount: t.itemCount + t2.itemCount };
-            if ((t1.userGroupId && t.userGroupId === t1.userGroupId) || (t2.userGroupId && t.userGroupId === t2.userGroupId)) return { ...t, userGroupId: targetId };
+            if (t.id === tile2Id) {
+              return { ...t, hidden: true, userGroupId: targetId };
+            }
+            if (t.id === tile1Id) {
+              return { 
+                ...t, 
+                text: t.text + ', ' + t2.text, 
+                userGroupId: targetId, 
+                itemCount: t1.itemCount + t2.itemCount 
+              };
+            }
+            // Update any other tiles that were in either of the two merged groups
+            if ((t1OldGroupId && t.userGroupId === t1OldGroupId) || 
+                (t2OldGroupId && t.userGroupId === t2OldGroupId)) {
+              return { ...t, userGroupId: targetId };
+            }
             return t;
           });
-        } else {
+        } else if (t1 && t2) {
           next.mistakes = prevState.mistakes + 1;
         }
         break;

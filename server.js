@@ -128,18 +128,21 @@ app.prepare().then(() => {
                         if (group) group.lastUpdated = Date.now();
                     }
 
+                    const t1OldGroupId = t1.userGroupId;
+                    const t2OldGroupId = t2.userGroupId;
+
                     state.tiles = state.tiles.map(t => {
-                        if (t.id === t2.id) return { ...t, hidden: true };
-                        if (t.id === t1.id) {
+                        if (t.id === tile2Id) return { ...t, hidden: true, userGroupId: targetGroupId };
+                        if (t.id === tile1Id) {
                             return { 
                                 ...t, 
                                 text: t.text + ', ' + t2.text,
                                 userGroupId: targetGroupId,
-                                itemCount: t.itemCount + t2.itemCount
+                                itemCount: t1.itemCount + t2.itemCount
                             };
                         }
-                        if ((t1.userGroupId && t.userGroupId === t1.userGroupId) || 
-                            (t2.userGroupId && t.userGroupId === t2.userGroupId)) {
+                        if ((t1OldGroupId && t.userGroupId === t1OldGroupId) || 
+                            (t2OldGroupId && t.userGroupId === t2OldGroupId)) {
                             return { ...t, userGroupId: targetGroupId };
                         }
                         return t;

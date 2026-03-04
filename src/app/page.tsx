@@ -78,8 +78,8 @@ function GameContent() {
       handleAction({ 
         type: 'MERGE_TILES', 
         payload: { 
-          tile1Id: prev.id, 
-          tile2Id: tile.id, 
+          tile1Id: tile.id, // Second click (survivor)
+          tile2Id: prev.id, // First click (being merged)
           newGroupColor: getRandomColor(state.userGroups.map(g => g.color))
         } 
       });
