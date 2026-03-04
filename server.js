@@ -163,7 +163,12 @@ app.prepare().then(() => {
         switch (action.type) {
             case 'MERGE_TILES': {
                 const success = performMerge(state, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
-                actionResult = { success, actionType: action.type, message: success ? 'Merged!' : 'Incorrect match!' };
+                actionResult = { 
+                    success, 
+                    actionType: action.type, 
+                    message: success ? 'Merged!' : 'Incorrect match!',
+                    involvedTileIds: [action.payload.tile1Id, action.payload.tile2Id]
+                };
                 stateChanged = true;
                 break;
             }
@@ -183,7 +188,12 @@ app.prepare().then(() => {
                         const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
                         if (primary) {
                             const success = performMerge(state, primary.id, tileId, '#fff', newGroupId);
-                            actionResult = { success, actionType: action.type, message: success ? 'Tagged!' : 'Incorrect match!' };
+                            actionResult = { 
+                                success, 
+                                actionType: action.type, 
+                                message: success ? 'Tagged!' : 'Incorrect match!',
+                                involvedTileIds: [primary.id, tileId]
+                            };
                             stateChanged = true;
                         } else { 
                             tile.userGroupId = groupId; stateChanged = true; 

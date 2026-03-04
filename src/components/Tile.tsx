@@ -8,6 +8,7 @@ interface TileProps {
   group?: UserGroup;
   gridSize: number;
   isSelected: boolean;
+  isError?: boolean;
   onMenuOpen: (e: React.MouseEvent<HTMLButtonElement>, id: string) => void;
   onTileClick: (tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
@@ -21,6 +22,7 @@ export const TileComponent = React.memo(({
   group,
   gridSize,
   isSelected,
+  isError,
   onMenuOpen,
   onTileClick,
   onDragStart,
@@ -44,6 +46,7 @@ export const TileComponent = React.memo(({
         onDragStart={(e) => onDragStart(e, tile)}
         onDragOver={onDragOver}
         onDrop={(e) => onDrop(e, tile)}
+        className={isError ? 'shake-error' : ''}
         sx={{
           position: 'relative',
           display: 'flex',

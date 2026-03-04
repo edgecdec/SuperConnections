@@ -39,4 +39,5 @@ export type ActionResponse = {
   success: boolean;
   actionType: string;
   message?: string;
+  involvedTileIds?: string[];
 };
