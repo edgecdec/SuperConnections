@@ -191,8 +191,42 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, getLatestState, onRemoteAction, onActionResult);
 
+  const [localTouchedGroupIds, setLocalTouchedGroupIds] = useState<string[]>([]);
+
+  // Load local touch history from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('superConnectionsLocalTouches');
+    if (saved) {
+      try {
+        setLocalTouchedGroupIds(JSON.parse(saved));
+      } catch (e) {
+        console.error('Failed to load local touches', e);
+      }
+    }
+  }, []);
+
+  const trackLocalTouch = useCallback((groupId: string) => {
+    setLocalTouchedGroupIds(prev => {
+      const next = [groupId, ...prev.filter(id => id !== groupId)].slice(0, 50);
+      localStorage.setItem('superConnectionsLocalTouches', JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
+    
+    // Track local touches for group-related actions
+    if (action.type === 'TAG_TILE' && action.payload.groupId) trackLocalTouch(action.payload.groupId);
+    if (action.type === 'RENAME_GROUP') trackLocalTouch(action.payload.groupId);
+    if (action.type === 'CREATE_GROUP') trackLocalTouch(action.payload.group.id);
+    if (action.type === 'MERGE_TILES') {
+      const t1 = stateRef.current.tiles.find(t => t.id === action.payload.tile1Id);
+      const t2 = stateRef.current.tiles.find(t => t.id === action.payload.tile2Id);
+      if (t1?.userGroupId) trackLocalTouch(t1.userGroupId);
+      if (t2?.userGroupId) trackLocalTouch(t2.userGroupId);
+    }
+
     setState(prev => {
       const result = applyActionToState(action, prev);
       return result.next;
@@ -200,7 +234,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     if (stateRef.current.roomCode) dispatchAction(action);
     const endTime = performance.now();
     log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
-  }, [dispatchAction, applyActionToState]);
+  }, [dispatchAction, applyActionToState, trackLocalTouch]);
 
   // PUBLIC MODULAR API
   const game = useMemo(() => ({
@@ -287,5 +321,6 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   const activeTiles = useMemo(() => state.tiles.filter(t => !t.locked), [state.tiles]);
 
-  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles };
+  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds };
 }
+

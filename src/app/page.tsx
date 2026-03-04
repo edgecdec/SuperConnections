@@ -18,7 +18,7 @@ function GameContent() {
 
   const {
     state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile,
-    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles
+    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds
   } = useGameLogic(roomCodeFromUrl);
 
   const lastActionResult = state.lastActionResult;
@@ -27,7 +27,7 @@ function GameContent() {
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
 
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [taggingDialogOpen, setTaggingDialogOpen] = useState(false);
   const [activeTileId, setActiveTileId] = useState<string | null>(null);
 
   const [renameDialogOpen, setRenameDialogOpen] = useState(false);
@@ -42,8 +42,8 @@ function GameContent() {
   
   const onMenuOpen = useCallback((event: React.MouseEvent<HTMLButtonElement>, tileId: string) => {
     event.stopPropagation();
-    setAnchorEl(event.currentTarget);
     setActiveTileId(tileId);
+    setTaggingDialogOpen(true);
   }, []);
 
   const onTileClick = useCallback((tile: Tile) => {
@@ -119,8 +119,12 @@ function GameContent() {
       />
 
       <TileMenu 
-        anchorEl={anchorEl} onClose={() => setAnchorEl(null)} activeTileId={activeTileId}
-        tiles={state.tiles} userGroups={state.userGroups}
+        open={taggingDialogOpen}
+        onClose={() => setTaggingDialogOpen(false)}
+        activeTileId={activeTileId}
+        tiles={state.tiles}
+        userGroups={state.userGroups}
+        localTouchedGroupIds={localTouchedGroupIds}
         onCreateGroup={(tileId) => {
           const newId = game.createGroup(tileId);
           if (newId) {
