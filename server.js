@@ -160,18 +160,52 @@ app.prepare().then(() => {
                 }
             });
 
-            // Feature: Pop to Top (of column)
+            // Feature: Pop to Top (of column) & True Column Gravity
             if (state.settings && state.settings.popToTop) {
-                const survivorIndex = state.tiles.findIndex(t => t.id === survivorId);
-                if (survivorIndex !== -1) {
-                    const survivorTile = state.tiles[survivorIndex];
-                    const columns = state.tilesPerRow || 25;
-                    const columnIdx = survivorIndex % columns;
-                    
-                    const filteredTiles = state.tiles.filter(t => t.id !== survivorId);
-                    filteredTiles.splice(columnIdx, 0, survivorTile);
-                    state.tiles = filteredTiles;
+                const columns = state.tilesPerRow || 25;
+                
+                // Reconstruct columns
+                const gridColumns = Array.from({ length: columns }, () => []);
+                let originalSurvivorColIdx = -1;
+
+                state.tiles.forEach((tile, index) => {
+                   const colIdx = index % columns;
+                   if (tile.id === survivorId) originalSurvivorColIdx = colIdx;
+                   gridColumns[colIdx].push(tile);
+                });
+
+                // For the column where the survivor is, move it to the front
+                if (originalSurvivorColIdx !== -1) {
+                    const col = gridColumns[originalSurvivorColIdx];
+                    const sIdx = col.findIndex(t => t.id === survivorId);
+                    if (sIdx !== -1) {
+                        const sTile = col[sIdx];
+                        col.splice(sIdx, 1);
+                        col.unshift(sTile); // Pop to top of this specific column
+                    }
                 }
+
+                // Apply true visual gravity: Push hidden (merged/locked) tiles to the absolute bottom of their columns
+                if (state.settings.gravity === 'up') {
+                   gridColumns.forEach(col => {
+                       const active = col.filter(t => !t.hidden && !t.locked);
+                       const hidden = col.filter(t => t.hidden || t.locked);
+                       col.length = 0;
+                       col.push(...active, ...hidden); // Active fall up, hidden sink down
+                   });
+                }
+
+                // Re-flatten the grid left-to-right, top-to-bottom
+                const flattenedTiles = [];
+                const numRows = Math.ceil(state.tiles.length / columns);
+                for (let row = 0; row < numRows; row++) {
+                    for (let col = 0; col < columns; col++) {
+                        if (gridColumns[col][row]) {
+                            flattenedTiles.push(gridColumns[col][row]);
+                        }
+                    }
+                }
+                state.tiles = flattenedTiles;
             }
 
             return true;
