@@ -383,7 +383,10 @@ export function useGameLogic(initialRoomCode: string | null) {
       };
 
       if (multi) {
+        // Set room code so handleAction dispatches to server
+        stateRef.current.roomCode = newState.roomCode;
         setState(newState);
+        setIsPlaying(true);
         handleAction({ type: 'START_GAME', payload: { settings, tiles: initialTiles } });
         router.push(`/?room=${newState.roomCode}`);
       } else {
