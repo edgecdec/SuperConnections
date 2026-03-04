@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Tile, UserGroup, GameState, GameAction } from '../types';
+import { Tile, UserGroup, GameState, GameAction, ActionResponse } from '../types';
 import { useSocket } from './useSocket';
 import { getRandomColor } from '../utils/colors';
 import categoriesDataRaw from '../data/categories.json';
@@ -24,6 +24,7 @@ export function useGameLogic(initialRoomCode: string | null) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
+  const [lastActionResult, setLastActionResult] = useState<ActionResponse | null>(null);
   
   const isRemoteUpdate = useRef(false);
 
@@ -55,17 +56,18 @@ export function useGameLogic(initialRoomCode: string | null) {
 
       const sOldId = survivor.userGroupId;
       const mOldId = merged.userGroupId;
+// Update survivor
+const survivorItems = survivor.text.split(', ').map(s => s.trim());
+const mergedItems = merged.text.split(', ').map(s => s.trim());
+// Ensure items are unique in the combined text
+survivor.text = Array.from(new Set([...survivorItems, ...mergedItems])).join(', ');
 
-      // Update survivor
-      survivor.text = survivor.text + ', ' + merged.text;
-      survivor.itemCount = survivor.itemCount + merged.itemCount;
-      survivor.userGroupId = targetId;
+survivor.itemCount = survivor.itemCount + merged.itemCount;
+survivor.userGroupId = targetId;
 
-      // Hide merged
       merged.hidden = true;
       merged.userGroupId = targetId;
 
-      // Move followers
       state.tiles.forEach(t => {
         if (t.id === survivorId || t.id === mergedId) return;
         if ((sOldId && t.userGroupId === sOldId) || (mOldId && t.userGroupId === mOldId)) {
@@ -79,20 +81,20 @@ export function useGameLogic(initialRoomCode: string | null) {
     }
   }, []);
 
-  const applyActionToState = useCallback((action: GameAction, prevState: GameState): GameState => {
+  const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
     const next: GameState = JSON.parse(JSON.stringify(prevState));
+    let success = true;
     
     switch (action.type) {
-      case 'MERGE_TILES': {
-        applyMerge(next, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
+      case 'MERGE_TILES':
+        success = applyMerge(next, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
         break;
-      }
       case 'RENAME_GROUP':
         const group = next.userGroups.find(g => g.id === action.payload.groupId);
         if (group) group.name = action.payload.newName;
         break;
       case 'TAG_TILE': {
-        const { tileId, groupId, newGroupId } = action.payload;
+        const { tileId, groupId } = action.payload;
         const tile = next.tiles.find(t => t.id === tileId);
         if (tile) {
           if (groupId === null) {
@@ -100,7 +102,7 @@ export function useGameLogic(initialRoomCode: string | null) {
           } else {
             const primary = next.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
             if (primary) {
-              applyMerge(next, primary.id, tileId, '#fff'); 
+              success = applyMerge(next, primary.id, tileId, '#fff'); 
             } else {
               tile.userGroupId = groupId;
             }
@@ -110,9 +112,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
       case 'CREATE_GROUP':
         const existing = next.userGroups.find(g => g.id === action.payload.group.id);
-        if (!existing) {
-          next.userGroups.push(action.payload.group);
-        }
+        if (!existing) next.userGroups.push(action.payload.group);
         if (action.payload.tileId) {
           const t = next.tiles.find(tile => tile.id === action.payload.tileId);
           if (t) t.userGroupId = action.payload.group.id;
@@ -129,7 +129,7 @@ export function useGameLogic(initialRoomCode: string | null) {
         break;
     }
 
-    // Completion Logic (Same as before but using unified state)
+    // Completion Logic
     const groupCounts: Record<string, number> = {};
     next.tiles.forEach(tile => {
         if (tile.userGroupId && !tile.locked && !tile.hidden) {
@@ -137,9 +137,7 @@ export function useGameLogic(initialRoomCode: string | null) {
         }
     });
 
-    let completedCat: string | null = null;
-    let completedGroupId: string | null = null;
-
+    const completedCats: { cat: string, gid: string }[] = [];
     for (const [groupId, count] of Object.entries(groupCounts)) {
         if (count === next.gridSize) {
             const groupTiles = next.tiles.filter(t => t.userGroupId === groupId && !t.locked);
@@ -147,28 +145,26 @@ export function useGameLogic(initialRoomCode: string | null) {
                 const firstCategory = groupTiles[0].realCategory;
                 if (groupTiles.every(t => t.realCategory === firstCategory)) {
                     if (!next.completedCategories.includes(firstCategory)) {
-                        completedCat = firstCategory;
-                        completedGroupId = groupId;
-                        break;
+                        completedCats.push({ cat: firstCategory, gid: groupId });
                     }
                 }
             }
         }
     }
 
-    if (completedCat && completedGroupId) {
-        if (!next.completedCategories.includes(completedCat)) {
-            next.completedCategories.push(completedCat);
+    completedCats.forEach(({ cat, gid }) => {
+        if (!next.completedCategories.includes(cat)) {
+            next.completedCategories.push(cat);
         }
         next.tiles.forEach(t => {
-          if (t.userGroupId === completedGroupId) {
+          if (t.userGroupId === gid) {
             t.locked = true;
             t.userGroupId = null;
           }
         });
-    }
+    });
 
-    return next;
+    return { next, success };
   }, [applyMerge]);
 
   const onStateUpdate = useCallback((newState: GameState) => {
@@ -181,43 +177,65 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, []);
 
   const onRemoteAction = useCallback((action: GameAction) => {
-    setState(prev => applyActionToState(action, prev));
+    setState(prev => applyActionToState(action, prev).next);
   }, [applyActionToState]);
+
+  const onActionResult = useCallback((response: ActionResponse) => {
+    setLastActionResult(response);
+    setTimeout(() => setLastActionResult(null), 1000);
+  }, []);
 
   const getLatestState = useCallback(() => isPlaying ? state : null, [isPlaying, state]);
 
-  const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, getLatestState, onRemoteAction);
+  const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, getLatestState, onRemoteAction, onActionResult);
 
-  // Persistence and logic...
-  
+  useEffect(() => {
+    if (isLoaded) return;
+    const saved = localStorage.getItem('superConnectionsState');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (parsed.isPlaying && (!initialRoomCode || parsed.roomCode === initialRoomCode)) {
+        setState(parsed);
+        setIsPlaying(true);
+      }
+    }
+    setIsLoaded(true);
+  }, [initialRoomCode, isLoaded]);
+
+  useEffect(() => {
+    if (isPlaying && !state.roomCode) {
+      localStorage.setItem('superConnectionsState', JSON.stringify({ ...state, isPlaying: true }));
+    } else if (!isPlaying && !state.roomCode) {
+      localStorage.removeItem('superConnectionsState');
+    }
+  }, [state, isPlaying]);
+
   const handleAction = useCallback((action: GameAction) => {
-    setState(prev => applyActionToState(action, prev));
+    const result = applyActionToState(action, state);
+    setState(result.next);
+    
+    if (!state.roomCode) {
+      setLastActionResult({ success: result.success, actionType: action.type });
+      setTimeout(() => setLastActionResult(null), 1000);
+    }
+
     if (state.roomCode) {
       dispatchAction(action);
     }
-  }, [state.roomCode, dispatchAction, applyActionToState]);
+  }, [state, dispatchAction, applyActionToState]);
 
   const handleStart = useCallback((multiplayer: boolean, size: number) => {
     const x = Math.min(Math.max(size, 2), 50);
     const allCatNames = Object.keys(categoriesData);
-    
-    // Shuffle category names to pick random ones
-    const shuffledCatNames = [...allCatNames];
-    for (let i = shuffledCatNames.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffledCatNames[i], shuffledCatNames[j]] = [shuffledCatNames[j], shuffledCatNames[i]];
-    }
-
+    const shuffledCatNames = [...allCatNames].sort(() => 0.5 - Math.random());
     const selectedCats = shuffledCatNames.slice(0, x);
     let initialTiles: Tile[] = [];
     selectedCats.forEach(cat => {
-      // Pick the first x items (the most recognizable ones)
       categoriesData[cat].slice(0, x).forEach(item => {
         initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat, userGroupId: null, locked: false, itemCount: 1 });
       });
     });
 
-    // Robust Fisher-Yates Shuffle for the tiles on the board
     for (let i = initialTiles.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]];
@@ -262,6 +280,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     groupStats,
     selectedTile,
     setSelectedTile,
+    lastActionResult,
     handleAction,
     handleStart,
     quitGame,

@@ -37,7 +37,7 @@ export const TileComponent = React.memo(({
 
   // Find all items in this group across all tiles if needed
   const tooltipContent = group 
-    ? allTiles.filter(t => t.userGroupId === group.id).map(t => t.text).join(', ')
+    ? allTiles.filter(t => t.userGroupId === group.id && !t.hidden).map(t => t.text).join(', ')
     : tile.text;
 
   return (

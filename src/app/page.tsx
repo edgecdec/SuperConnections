@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, Suspense, useMemo } from 'react';
+import React, { useState, useCallback, Suspense, useMemo, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Container,
@@ -42,6 +42,7 @@ function GameContent() {
     groupStats,
     selectedTile,
     setSelectedTile,
+    lastActionResult,
     handleAction,
     handleStart,
     quitGame
@@ -63,6 +64,25 @@ function GameContent() {
     message: '',
     severity: 'info',
   });
+
+  // Effect to handle success/failure toast from actions
+  useEffect(() => {
+    if (lastActionResult) {
+      if (lastActionResult.success) {
+        setToast({ 
+          open: true, 
+          message: `${lastActionResult.actionType.replace('_', ' ')} Successful!`, 
+          severity: 'success' 
+        });
+      } else {
+        setToast({ 
+          open: true, 
+          message: lastActionResult.message || 'Incorrect match!', 
+          severity: 'error' 
+        });
+      }
+    }
+  }, [lastActionResult]);
 
   const onMenuOpen = useCallback((event: React.MouseEvent<HTMLButtonElement>, tileId: string) => {
     event.stopPropagation();
@@ -87,7 +107,7 @@ function GameContent() {
           } 
         });
         setSelectedTile(null);
-        setToast({ open: true, message: 'Merging tiles...', severity: 'info' });
+        setToast({ open: true, message: 'Processing merge...', severity: 'info' });
       }
     } else {
       setSelectedTile(tile);
@@ -115,7 +135,7 @@ function GameContent() {
         } 
       });
       setSelectedTile(null);
-      setToast({ open: true, message: 'Merging tiles...', severity: 'info' });
+      setToast({ open: true, message: 'Processing merge...', severity: 'info' });
     } catch (err) { console.error(err); }
   }, [handleAction, state.userGroups]);
 
@@ -174,27 +194,30 @@ function GameContent() {
                 >
                   <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>{cat}</Typography>
                   <Typography variant="body2">
-                    {state.tiles.filter(t => t.realCategory === cat).map(t => t.text).join(', ')}
+                    {state.tiles.filter(t => t.realCategory === cat && !t.hidden).map(t => t.text).join(', ')}
                   </Typography>
                 </Paper>
               ))}
-              {activeTiles.map((tile) => (
-                tile.hidden ? 
+              {activeTiles.map((tile) => {
+                const isError = !lastActionResult?.success && lastActionResult?.actionType === 'MERGE_TILES';
+                // Note: Realistically we should track which specific tiles errored, but for simplicity we shake on any merge error
+                return tile.hidden ? 
                   <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} /> :
-                  <TileComponent 
-                    key={tile.id} 
-                    tile={tile} 
-                    group={state.userGroups.find(g => g.id === tile.userGroupId)} 
-                    gridSize={state.gridSize} 
-                    isSelected={selectedTile?.id === tile.id} 
-                    onMenuOpen={onMenuOpen} 
-                    onTileClick={onTileClick} 
-                    onDragStart={onDragStart} 
-                    onDragOver={e => e.preventDefault()} 
-                    onDrop={onDrop} 
-                    allTiles={state.tiles}
-                  />
-              ))}
+                  <Box key={tile.id} className={isError ? 'shake-error' : ''}>
+                    <TileComponent 
+                      tile={tile} 
+                      group={state.userGroups.find(g => g.id === tile.userGroupId)} 
+                      gridSize={state.gridSize} 
+                      isSelected={selectedTile?.id === tile.id} 
+                      onMenuOpen={onMenuOpen} 
+                      onTileClick={onTileClick} 
+                      onDragStart={onDragStart} 
+                      onDragOver={e => e.preventDefault()} 
+                      onDrop={onDrop} 
+                      allTiles={state.tiles}
+                    />
+                  </Box>;
+              })}
             </Box>
           </Box>
         </Box>
@@ -212,18 +235,28 @@ function GameContent() {
         onRefillBoard={() => handleAction({ type: 'REFILL_BOARD' })}
         onQuitGame={quitGame}
         onCreateNewGroup={() => {
+          const targetTileId = selectedTile?.id || activeTileId;
+          const targetTile = state.tiles.find(t => t.id === targetTileId);
+          
+          if (targetTile?.userGroupId) {
+            setToast({ open: true, message: 'This item is already in a group!', severity: 'warning' });
+            return;
+          }
+
           const newId = Math.random().toString(36).substring(2, 9);
           const name = `Group ${state.userGroups.length + 1}`;
+          
           handleAction({ 
             type: 'CREATE_GROUP', 
             payload: { 
-              tileId: activeTileId, 
+              tileId: targetTileId || null, 
               group: { id: newId, name, color: getRandomColor(state.userGroups.map(g => g.color)), lastUpdated: Date.now() } 
             } 
           });
           setGroupToRename(newId);
           setNewGroupName(name);
           setRenameDialogOpen(true);
+          setSelectedTile(null);
           setToast({ open: true, message: 'Creating group...', severity: 'info' });
         }}
         onOpenRenameDialog={(id, name) => {
@@ -248,6 +281,12 @@ function GameContent() {
 
       <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={() => setAnchorEl(null)}>
         <MenuItem onClick={() => {
+          const targetTile = state.tiles.find(t => t.id === activeTileId);
+          if (targetTile?.userGroupId) {
+            setToast({ open: true, message: 'This item is already in a group!', severity: 'warning' });
+            setAnchorEl(null);
+            return;
+          }
           const newId = Math.random().toString(36).substring(2, 9);
           const name = `Group ${state.userGroups.length + 1}`;
           handleAction({ 
@@ -286,7 +325,7 @@ function GameContent() {
           setToast({ open: true, message: 'Renaming group...', severity: 'info' });
         }}>Save</Button></DialogActions>
       </Dialog>
-      <Snackbar open={toast.open} autoHideDuration={4000} onClose={() => setToast({ ...toast, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}><Alert severity={toast.severity} sx={{ width: '100%' }}>{toast.message}</Alert></Snackbar>
+      <Snackbar open={toast.open} autoHideDuration={1500} onClose={() => setToast({ ...toast, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}><Alert severity={toast.severity} sx={{ width: '100%' }}>{toast.message}</Alert></Snackbar>
     </Box>
   );
 

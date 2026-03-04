@@ -96,7 +96,7 @@ app.prepare().then(() => {
        }
     });
 
-    const performMerge = (state, survivorId, mergedId, newGroupColor) => {
+    const performMerge = (state, survivorId, mergedId, newGroupColor, forceGroupId) => {
         const survivor = state.tiles.find(t => t.id === survivorId);
         const merged = state.tiles.find(t => t.id === mergedId);
 
@@ -104,10 +104,14 @@ app.prepare().then(() => {
 
         if (survivor.realCategory === merged.realCategory) {
             state.score += 1;
-            let targetId = survivor.userGroupId || merged.userGroupId;
+            let targetId = survivor.userGroupId || merged.userGroupId || forceGroupId;
             
             if (!targetId) {
                 targetId = Math.random().toString(36).substring(2, 9);
+            }
+
+            const existingGroup = state.userGroups.find(g => g.id === targetId);
+            if (!existingGroup) {
                 state.userGroups.push({ 
                     id: targetId, 
                     name: `Group ${state.userGroups.length + 1}`, 
@@ -115,14 +119,17 @@ app.prepare().then(() => {
                     lastUpdated: Date.now() 
                 });
             } else {
-                const group = state.userGroups.find(g => g.id === targetId);
-                if (group) group.lastUpdated = Date.now();
+                existingGroup.lastUpdated = Date.now();
             }
 
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            survivor.text = survivor.text + ', ' + merged.text;
+            // Update survivor
+            const survivorItems = survivor.text.split(', ').map(s => s.trim());
+            const mergedItems = merged.text.split(', ').map(s => s.trim());
+            survivor.text = Array.from(new Set([...survivorItems, ...mergedItems])).join(', ');
+
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
 
@@ -153,7 +160,13 @@ app.prepare().then(() => {
 
         switch (action.type) {
             case 'MERGE_TILES': {
-                stateChanged = performMerge(state, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor) || true;
+                const result = performMerge(state, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
+                socket.emit('action_result', { 
+                    success: result, 
+                    actionType: action.type, 
+                    message: result ? 'Merged!' : 'Incorrect match!' 
+                });
+                stateChanged = true; // Mistakes also count as state change
                 break;
             }
 
@@ -163,24 +176,35 @@ app.prepare().then(() => {
                 if (group) {
                     group.name = newName;
                     stateChanged = true;
+                    socket.emit('action_result', { success: true, actionType: action.type });
+                } else {
+                    socket.emit('action_result', { success: false, actionType: action.type, message: 'Group not found' });
                 }
                 break;
             }
 
             case 'TAG_TILE': {
-                const { tileId, groupId } = action.payload;
+                const { tileId, groupId, newGroupId } = action.payload;
                 const tile = state.tiles.find(t => t.id === tileId);
                 if (tile) {
                     if (groupId === null) {
                         tile.userGroupId = null;
                         stateChanged = true;
+                        socket.emit('action_result', { success: true, actionType: action.type });
                     } else {
                         const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
                         if (primary) {
-                            stateChanged = performMerge(state, primary.id, tileId, '#fff') || true;
+                            const result = performMerge(state, primary.id, tileId, '#fff', newGroupId);
+                            socket.emit('action_result', { 
+                                success: result, 
+                                actionType: action.type,
+                                message: result ? 'Tagged and Merged!' : 'Incorrect match!'
+                            });
+                            stateChanged = true;
                         } else {
                             tile.userGroupId = groupId;
                             stateChanged = true;
+                            socket.emit('action_result', { success: true, actionType: action.type });
                         }
                     }
                 }
@@ -189,10 +213,14 @@ app.prepare().then(() => {
 
             case 'CREATE_GROUP': {
                 const { tileId, group } = action.payload;
-                state.userGroups.push(group);
+                const existing = state.userGroups.find(g => g.id === group.id);
+                if (!existing) {
+                    state.userGroups.push(group);
+                }
                 const tile = state.tiles.find(t => t.id === tileId);
                 if (tile) tile.userGroupId = group.id;
                 stateChanged = true;
+                socket.emit('action_result', { success: true, actionType: action.type });
                 break;
             }
 
@@ -201,6 +229,7 @@ app.prepare().then(() => {
                 const locked = state.tiles.filter(t => t.locked);
                 state.tiles = [...unlocked, ...locked];
                 stateChanged = true;
+                socket.emit('action_result', { success: true, actionType: action.type });
                 break;
             }
 
@@ -208,6 +237,7 @@ app.prepare().then(() => {
                 if (action.payload.tilesPerRow !== undefined) state.tilesPerRow = action.payload.tilesPerRow;
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
                 stateChanged = true;
+                socket.emit('action_result', { success: true, actionType: action.type });
                 break;
             }
         }

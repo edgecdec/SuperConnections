@@ -2,13 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import io from 'socket.io-client';
-import { GameState, GameAction } from '../types';
+import { GameState, GameAction, ActionResponse } from '../types';
 
 export function useSocket(
   roomCode: string | null, 
   onStateUpdate: (state: GameState) => void,
   getLatestState?: () => GameState | null,
-  onRemoteAction?: (action: GameAction) => void
+  onRemoteAction?: (action: GameAction) => void,
+  onActionResult?: (response: ActionResponse) => void
 ) {
   const socketRef = useRef<any>(null);
   const [isHost, setIsHost] = useState(false);
@@ -49,6 +50,10 @@ export function useSocket(
       if (onRemoteAction) onRemoteAction(action);
     });
 
+    socket.on('action_result', (response: ActionResponse) => {
+      if (onActionResult) onActionResult(response);
+    });
+
     socket.on('request_state', () => {
       const state = getLatestStateRef.current ? getLatestStateRef.current() : null;
       if (state && state.tiles && state.tiles.length > 0) {
@@ -60,7 +65,7 @@ export function useSocket(
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomCode, onStateUpdate, onRemoteAction]);
+  }, [roomCode, onStateUpdate, onRemoteAction, onActionResult]);
 
   const dispatchAction = useCallback((action: GameAction) => {
     if (socketRef.current && roomCode) {

@@ -145,7 +145,7 @@ export const Sidebar = ({
       <Box flex={1} sx={{ overflowY: 'auto' }}>
         {groupStats.map((group) => {
           const groupItems = tiles
-            .filter(t => t.userGroupId === group.id)
+            .filter(t => t.userGroupId === group.id && !t.hidden)
             .map(t => t.text)
             .join(', ');
 
