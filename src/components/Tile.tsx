@@ -65,10 +65,13 @@ export const TileComponent = React.memo(({
           wordBreak: 'normal',
           overflowWrap: 'break-word',
           fontSize: gridSize > 10 ? '0.7rem' : '1rem',
-          transition: 'all 0.1s ease-in-out',
+          transition: 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s, opacity 0.2s',
           transform: isSelected ? 'scale(1.05)' : 'scale(1)',
           zIndex: isSelected ? 10 : 1,
-          opacity: tile.locked ? 0.6 : 1
+          opacity: tile.locked ? 0.6 : 1,
+          '&:active': {
+            transform: 'scale(0.95)',
+          }
         }}
       >
         <Typography variant="body2" fontWeight="bold" sx={{ pointerEvents: 'none' }}>

@@ -82,6 +82,10 @@ app.prepare().then(() => {
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
+           if (rooms[roomCode].state) {
+               rooms[roomCode].state.startTime = rooms[roomCode].state.startTime || Date.now();
+               rooms[roomCode].state.playerStats = rooms[roomCode].state.playerStats || {};
+           }
            console.log(`Room ${roomCode} created by host ${userId}`);
        } else if (rooms[roomCode].cleanupTimer) {
            clearTimeout(rooms[roomCode].cleanupTimer);
@@ -155,6 +159,15 @@ app.prepare().then(() => {
                     t.userGroupId = targetId;
                 }
             });
+
+            // Feature: Pop to Top
+            if (state.settings && state.settings.popToTop) {
+                const survivorTile = state.tiles.find(t => t.id === survivorId);
+                if (survivorTile) {
+                    state.tiles = [survivorTile, ...state.tiles.filter(t => t.id !== survivorId)];
+                }
+            }
+
             return true;
         } else {
             state.mistakes += 1;

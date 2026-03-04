@@ -14,7 +14,8 @@ import {
   Autocomplete,
   Chip,
   Paper,
-  Divider
+  Divider,
+  Switch
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
@@ -34,6 +35,8 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
   const [includeNiche, setIncludeNiche] = useState(false);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [manualCategories, setManualCategories] = useState<string[]>([]);
+  const [popToTop, setPopToTop] = useState(false);
+  const [gravity, setGravity] = useState<'none' | 'up'>('up');
   
   // CSV State
   const [csvData, setCsvData] = useState<{ name: string, items: string[] }[] | null>(null);
@@ -70,7 +73,6 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
         items: rows.slice(1).map(row => row[index]).filter(item => item)
       }));
 
-      // Validate dimensions
       const minItems = Math.min(...data.map(d => d.items.length));
       if (minItems < 2) {
         setCsvError("Each category in CSV must have at least 2 items.");
@@ -95,7 +97,9 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
       includeNiche,
       activeTags,
       manualCategories,
-      customCategories: csvData || undefined
+      customCategories: csvData || undefined,
+      popToTop,
+      gravity
     };
     
     onStart(multiplayer, settings);
@@ -151,10 +155,18 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
 
                 <Divider />
 
-                <Box>
+                <Box display="flex" flexDirection="column" gap={1}>
                   <FormControlLabel
                     control={<Checkbox checked={includeNiche} onChange={e => setIncludeNiche(e.target.checked)} />}
                     label="Include Niche/Specialized Categories"
+                  />
+                  <FormControlLabel
+                    control={<Switch checked={popToTop} onChange={e => setPopToTop(e.target.checked)} />}
+                    label="Pop combined items to Top"
+                  />
+                  <FormControlLabel
+                    control={<Switch checked={gravity === 'up'} onChange={e => setGravity(e.target.checked ? 'up' : 'none')} />}
+                    label="Gravity (Collapse upwards)"
                   />
                 </Box>
 

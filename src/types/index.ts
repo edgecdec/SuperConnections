@@ -47,6 +47,8 @@ export type GameSettings = {
   activeTags: string[];
   manualCategories: string[];
   customCategories?: { name: string, items: string[] }[];
+  popToTop: boolean;
+  gravity: 'none' | 'up';
 };
 
 export type GameState = {
