@@ -35,7 +35,7 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
   const [includeNiche, setIncludeNiche] = useState(false);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [manualCategories, setManualCategories] = useState<string[]>([]);
-  const [popToTop, setPopToTop] = useState(false);
+  const [popToTop, setPopToTop] = useState(true);
   const [gravity, setGravity] = useState<'none' | 'up'>('up');
   
   // CSV State
