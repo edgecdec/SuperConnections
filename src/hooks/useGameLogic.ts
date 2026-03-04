@@ -95,22 +95,51 @@ export function useGameLogic(initialRoomCode: string | null) {
         return t;
       });
 
-      // Feature: Pop to Top (of column)
+      // Feature: Pop to Top (of column) & True Column Gravity
       if (prevState.settings.popToTop) {
-        const survivorIndex = nextTiles.findIndex(t => t.id === survivorId);
-        const survivorTile = nextTiles[survivorIndex];
-        
-        // Calculate the column index based on the current position
         const columns = prevState.tilesPerRow;
-        const columnIdx = survivorIndex % columns;
-
-        // Create an array without the survivor tile
-        const filteredTiles = nextTiles.filter(t => t.id !== survivorId);
         
-        // Insert the survivor tile at the very top of its column
-        // The top of column X is just index X
-        filteredTiles.splice(columnIdx, 0, survivorTile);
-        nextTiles = filteredTiles;
+        // Reconstruct columns
+        const gridColumns: Tile[][] = Array.from({ length: columns }, () => []);
+        let originalSurvivorColIdx = -1;
+
+        nextTiles.forEach((tile, index) => {
+           const colIdx = index % columns;
+           if (tile.id === survivorId) originalSurvivorColIdx = colIdx;
+           gridColumns[colIdx].push(tile);
+        });
+
+        // For the column where the survivor is, move it to the front
+        if (originalSurvivorColIdx !== -1) {
+            const col = gridColumns[originalSurvivorColIdx];
+            const sIdx = col.findIndex(t => t.id === survivorId);
+            const sTile = col[sIdx];
+            col.splice(sIdx, 1);
+            col.unshift(sTile); // Pop to top of this specific column
+        }
+
+        // Apply true visual gravity: Push hidden (merged/locked) tiles to the absolute bottom of their columns
+        // This ensures the active tiles visually "fall" upwards to fill the gap.
+        if (prevState.settings.gravity === 'up') {
+           gridColumns.forEach(col => {
+               const active = col.filter(t => !t.hidden && !t.locked);
+               const hidden = col.filter(t => t.hidden || t.locked);
+               col.length = 0;
+               col.push(...active, ...hidden); // Active fall up, hidden sink down
+           });
+        }
+
+        // Re-flatten the grid left-to-right, top-to-bottom
+        const flattenedTiles: Tile[] = [];
+        const numRows = Math.ceil(nextTiles.length / columns);
+        for (let row = 0; row < numRows; row++) {
+            for (let col = 0; col < columns; col++) {
+                if (gridColumns[col][row]) {
+                    flattenedTiles.push(gridColumns[col][row]);
+                }
+            }
+        }
+        nextTiles = flattenedTiles;
       }
 
       return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, success: true };
