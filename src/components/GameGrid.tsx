@@ -19,8 +19,8 @@ interface GameGridProps {
   onCopyRoomLink: () => void;
   onMenuOpen: (e: React.MouseEvent<HTMLButtonElement>, id: string) => void;
   onTileClick: (tile: Tile) => void;
-  onDragStart: (e: React.DragEvent, tile: Tile) => void;
-  onDrop: (e: React.DragEvent, targetTile: Tile) => void;
+  onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
+  onDrop: (e: React.DragEvent<HTMLDivElement>, targetTile: Tile) => void;
 }
 
 export const GameGrid = React.memo(({
@@ -60,6 +60,10 @@ export const GameGrid = React.memo(({
     );
   }
 
+  // Pre-calculate booleans to ensure prop stability for children
+  const involvedTileIds = lastActionResult?.involvedTileIds || [];
+  const actionFailed = lastActionResult?.success === false;
+
   return (
     <Box flex={3} display="flex" flexDirection="column" sx={{ overflowY: 'auto' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
@@ -82,8 +86,8 @@ export const GameGrid = React.memo(({
             </Paper>
           ))}
           {activeTiles.map((tile) => {
-            const isSelected = selectedTile?.id === tile.id;
-            const isError = !lastActionResult?.success && lastActionResult?.involvedTileIds?.includes(tile.id);
+            const isSelected = !!(selectedTile && selectedTile.id === tile.id);
+            const isError = !!(actionFailed && involvedTileIds.includes(tile.id));
             const group = groupIdMap[tile.userGroupId || ''];
             const tooltipText = group ? groupItemMap[group.id] : tile.text;
 

@@ -8,7 +8,7 @@ interface TileProps {
   group?: UserGroup;
   gridSize: number;
   isSelected: boolean;
-  isError?: boolean;
+  isError: boolean;
   onMenuOpen: (e: React.MouseEvent<HTMLButtonElement>, id: string) => void;
   onTileClick: (tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
@@ -30,7 +30,9 @@ export const TileComponent = React.memo(({
   onDrop,
   tooltipText
 }: TileProps) => {
-  console.log(`[RENDER] Tile ${tile.id} (${tile.text.substring(0, 10)})`);
+  // --- PERFORMANCE LOG ---
+  console.log(`[RENDER] Tile ${tile.id}`);
+  
   let displayText = tile.text;
   if (tile.itemCount > 2) {
      const firstItem = tile.text.split(',')[0];
@@ -63,17 +65,17 @@ export const TileComponent = React.memo(({
           wordBreak: 'normal',
           overflowWrap: 'break-word',
           fontSize: gridSize > 10 ? '0.7rem' : '1rem',
-          transition: 'all 0.2s ease-in-out',
+          transition: 'all 0.1s ease-in-out',
           transform: isSelected ? 'scale(1.05)' : 'scale(1)',
           zIndex: isSelected ? 10 : 1,
           opacity: tile.locked ? 0.6 : 1
         }}
       >
-        <Typography variant="body2" fontWeight="bold">
+        <Typography variant="body2" fontWeight="bold" sx={{ pointerEvents: 'none' }}>
           {displayText}
         </Typography>
         {tile.itemCount > 1 && (
-          <Typography variant="caption" sx={{ position: 'absolute', bottom: 2, right: 4, fontWeight: 'bold', fontSize: '0.7em', color: group ? '#333' : '#666' }}>
+          <Typography variant="caption" sx={{ position: 'absolute', bottom: 2, right: 4, fontWeight: 'bold', fontSize: '0.7em', color: group ? '#333' : '#666', pointerEvents: 'none' }}>
             [{tile.itemCount}]
           </Typography>
         )}
@@ -88,18 +90,22 @@ export const TileComponent = React.memo(({
     </Tooltip>
   );
 }, (prev, next) => {
-  // Deep comparison for memoization
-  return prev.isSelected === next.isSelected &&
-         prev.isError === next.isError &&
-         prev.tile.text === next.tile.text &&
-         prev.tile.userGroupId === next.tile.userGroupId &&
-         prev.tile.itemCount === next.tile.itemCount &&
-         prev.tile.locked === next.tile.locked &&
-         prev.tile.hidden === next.tile.hidden &&
-         prev.group?.color === next.group?.color &&
-         prev.group?.name === next.group?.name &&
-         prev.tooltipText === next.tooltipText &&
-         prev.gridSize === next.gridSize;
+  // SURGICAL COMPARISON LOGGING
+  const changed = [];
+  if (prev.isSelected !== next.isSelected) changed.push('isSelected');
+  if (prev.isError !== next.isError) changed.push('isError');
+  if (prev.tooltipText !== next.tooltipText) changed.push('tooltipText');
+  if (prev.tile.text !== next.tile.text) changed.push('tile.text');
+  if (prev.tile.userGroupId !== next.tile.userGroupId) changed.push('tile.userGroupId');
+  if (prev.tile.itemCount !== next.tile.itemCount) changed.push('tile.itemCount');
+  if (prev.group?.color !== next.group?.color) changed.push('group.color');
+  if (prev.group?.name !== next.group?.name) changed.push('group.name');
+  
+  if (changed.length > 0) {
+    // console.log(`[MEMO] Tile ${next.tile.id} invalidated due to: ${changed.join(', ')}`);
+    return false;
+  }
+  return true;
 });
 
 TileComponent.displayName = 'TileComponent';

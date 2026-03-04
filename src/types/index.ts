@@ -15,6 +15,13 @@ export type UserGroup = {
   lastUpdated: number;
 };
 
+export type ActionResponse = {
+  success: boolean;
+  actionType: string;
+  message?: string;
+  involvedTileIds?: string[];
+};
+
 export type GameState = {
   roomCode: string | null;
   gridSize: number;
@@ -25,6 +32,7 @@ export type GameState = {
   score: number;
   tilesPerRow: number;
   autoRefill: boolean;
+  lastActionResult: ActionResponse | null;
 };
 
 export type GameAction = 
@@ -33,11 +41,5 @@ export type GameAction =
   | { type: 'TAG_TILE'; payload: { tileId: string; groupId: string | null; newGroupId?: string } }
   | { type: 'CREATE_GROUP'; payload: { tileId: string | null; group: UserGroup } }
   | { type: 'REFILL_BOARD'; payload?: never }
-  | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } };
-
-export type ActionResponse = {
-  success: boolean;
-  actionType: string;
-  message?: string;
-  involvedTileIds?: string[];
-};
+  | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } }
+  | { type: 'CLEAR_RESULT'; payload?: never };

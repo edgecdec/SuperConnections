@@ -18,13 +18,13 @@ export function useGameLogic(initialRoomCode: string | null) {
     mistakes: 0,
     score: 0,
     tilesPerRow: 12,
-    autoRefill: false
+    autoRefill: false,
+    lastActionResult: null
   });
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
-  const [lastActionResult, setLastActionResult] = useState<ActionResponse | null>(null);
   
   const isRemoteUpdate = useRef(false);
   const stateRef = useRef(state);
@@ -33,126 +33,110 @@ export function useGameLogic(initialRoomCode: string | null) {
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { selectedTileRef.current = selectedTile; }, [selectedTile]);
 
-  // --- DERIVED DATA (MEMOIZED & SURGICAL) ---
-  
-  const groupIdMap = useMemo(() => {
-    const map: Record<string, UserGroup> = {};
-    state.userGroups.forEach(g => map[g.id] = g);
-    return map;
-  }, [state.userGroups]);
+  // --- ATOMIC SURGICAL ENGINE ---
 
-  const groupItemMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    state.tiles.forEach(t => {
-      if (t.userGroupId && !t.hidden) {
-        if (!map[t.userGroupId]) map[t.userGroupId] = t.text;
-        else map[t.userGroupId] += ', ' + t.text;
+  const applyMergeSurgical = (prevState: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): { next: GameState, success: boolean } => {
+    const survivor = prevState.tiles.find(t => t.id === survivorId);
+    const merged = prevState.tiles.find(t => t.id === mergedId);
+
+    if (!survivor || !merged || survivor.id === mergedId || survivor.hidden || merged.hidden) return { next: prevState, success: false };
+
+    if (survivor.realCategory === merged.realCategory) {
+      let targetId = survivor.userGroupId || merged.userGroupId || forceGroupId;
+      
+      if (!targetId) {
+        targetId = Math.random().toString(36).substring(2, 9);
       }
-    });
-    return map;
-  }, [state.tiles]);
 
-  const solvedItemMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    state.completedCategories.forEach(cat => {
-      map[cat] = state.tiles.filter(t => t.realCategory === cat && !t.hidden).map(t => t.text).join(', ');
-    });
-    return map;
-  }, [state.completedCategories, state.tiles]);
+      let newUserGroups = [...prevState.userGroups];
+      
+      if (!prevState.userGroups.find(g => g.id === targetId)) {
+        newUserGroups.push({ id: targetId as string, name: `Group ${newUserGroups.length + 1}`, color: newGroupColor, lastUpdated: Date.now() });
+      } else {
+        newUserGroups = newUserGroups.map(g => g.id === targetId ? { ...g, lastUpdated: Date.now() } : g);
+      }
 
-  const activeTiles = useMemo(() => state.tiles.filter(t => !t.locked), [state.tiles]);
+      const sOldId = survivor.userGroupId;
+      const mOldId = merged.userGroupId;
 
-  // --- CORE ENGINE (SURGICAL UPDATES) ---
+      const nextTiles = prevState.tiles.map(t => {
+        if (t.id === mergedId) return { ...t, hidden: true, userGroupId: targetId };
+        if (t.id === survivorId) {
+          const survivorItems = t.text.split(', ').map(s => s.trim());
+          const mergedItems = merged.text.split(', ').map(s => s.trim());
+          return { 
+            ...t, 
+            text: Array.from(new Set([...survivorItems, ...mergedItems])).join(', '),
+            itemCount: t.itemCount + merged.itemCount,
+            userGroupId: targetId
+          };
+        }
+        if ((sOldId && t.userGroupId === sOldId) || (mOldId && t.userGroupId === mOldId)) return { ...t, userGroupId: targetId };
+        return t;
+      });
+
+      return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, success: true };
+    } else {
+      return { next: { ...prevState, mistakes: prevState.mistakes + 1 }, success: false };
+    }
+  };
 
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
-    let nextState = prevState;
-    let success = true;
+    let result: { next: GameState, success: boolean } = { next: { ...prevState, lastActionResult: null }, success: true };
     
     switch (action.type) {
       case 'MERGE_TILES': {
-        const { tile1Id, tile2Id, newGroupColor, newGroupId } = action.payload;
-        const t1 = prevState.tiles.find(t => t.id === tile1Id);
-        const t2 = prevState.tiles.find(t => t.id === tile2Id);
-
-        if (!t1 || !t2 || t1.id === t2.id || t1.hidden || t2.hidden) { success = false; break; }
-
-        if (t1.realCategory === t2.realCategory) {
-          let targetId = t1.userGroupId || t2.userGroupId || newGroupId;
-          let newUserGroups = [...prevState.userGroups];
-          if (!prevState.userGroups.find(g => g.id === targetId)) {
-            newUserGroups.push({ id: targetId, name: `Group ${newUserGroups.length + 1}`, color: newGroupColor, lastUpdated: Date.now() });
-          } else {
-            newUserGroups = newUserGroups.map(g => g.id === targetId ? { ...g, lastUpdated: Date.now() } : g);
-          }
-
-          const t1OldId = t1.userGroupId;
-          const t2OldId = t2.userGroupId;
-
-          const nextTiles = prevState.tiles.map(t => {
-            if (t.id === tile2Id) return { ...t, hidden: true, userGroupId: targetId };
-            if (t.id === tile1Id) {
-              const items = Array.from(new Set([...t.text.split(', '), ...t2.text.split(', ')]));
-              return { ...t, text: items.join(', '), itemCount: t.itemCount + t2.itemCount, userGroupId: targetId };
-            }
-            if ((t1OldId && t.userGroupId === t1OldId) || (t2OldId && t.userGroupId === t2OldId)) return { ...t, userGroupId: targetId };
-            return t;
-          });
-          nextState = { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 };
-        } else { nextState = { ...prevState, mistakes: prevState.mistakes + 1 }; success = false; }
+        const mergeResult = applyMergeSurgical(prevState, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
+        result = { next: { ...mergeResult.next, lastActionResult: null }, success: mergeResult.success };
         break;
       }
-
       case 'RENAME_GROUP':
-        nextState = { ...prevState, userGroups: prevState.userGroups.map(g => g.id === action.payload.groupId ? { ...g, name: action.payload.newName } : g) };
+        result.next = { ...prevState, userGroups: prevState.userGroups.map(g => g.id === action.payload.groupId ? { ...g, name: action.payload.newName } : g) };
         break;
-
       case 'TAG_TILE': {
         const { tileId, groupId, newGroupId } = action.payload;
-        const tile = prevState.tiles.find(t => t.id === tileId);
-        if (!tile) break;
-
         if (groupId === null) {
-          const currentGroupId = tile.userGroupId;
+          const tile = prevState.tiles.find(t => t.id === tileId);
+          const currentGroupId = tile?.userGroupId;
           const groupCount = currentGroupId ? prevState.tiles.reduce((acc, t) => (t.userGroupId === currentGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0) : 0;
-          if (tile.itemCount === 1 && groupCount === 1) nextState = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null } : t) };
-          else success = false;
+          if (tile && tile.itemCount === 1 && groupCount === 1) nextState: { result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null } : t) }; }
+          else result.success = false;
         } else {
           const primary = prevState.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
-          if (primary) {
-            const res = applyActionToState({ type: 'MERGE_TILES', payload: { tile1Id: primary.id, tile2Id: tileId, newGroupColor: '#fff', newGroupId: newGroupId || '' } }, prevState);
-            nextState = res.next; success = res.success;
-          } else nextState = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t) };
+          if (primary) result = applyMergeSurgical(prevState, primary.id, tileId, '#fff', newGroupId);
+          else result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t) };
         }
         break;
       }
-
-      case 'CREATE_GROUP': {
+      case 'CREATE_GROUP':
         const existing = prevState.userGroups.find(g => g.id === action.payload.group.id);
-        const newUserGroups = existing ? prevState.userGroups : [...prevState.userGroups, action.payload.group];
-        const nextTiles = action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id } : t) : prevState.tiles;
-        nextState = { ...prevState, userGroups: newUserGroups, tiles: nextTiles };
+        result.next = { 
+          ...prevState, 
+          userGroups: existing ? prevState.userGroups : [...prevState.userGroups, action.payload.group],
+          tiles: action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id } : t) : prevState.tiles
+        };
         break;
-      }
-
       case 'REFILL_BOARD':
-        nextState = { ...prevState, tiles: [...prevState.tiles.filter(t => !t.locked && !t.hidden), ...prevState.tiles.filter(t => t.locked)] };
+        result.next = { ...prevState, tiles: [...prevState.tiles.filter(t => !t.locked && !t.hidden), ...prevState.tiles.filter(t => t.locked)] };
         break;
-
       case 'UPDATE_SETTINGS':
-        nextState = { ...prevState, tilesPerRow: action.payload.tilesPerRow ?? prevState.tilesPerRow, autoRefill: action.payload.autoRefill ?? prevState.autoRefill };
+        result.next = { ...prevState, tilesPerRow: action.payload.tilesPerRow ?? prevState.tilesPerRow, autoRefill: action.payload.autoRefill ?? prevState.autoRefill };
+        break;
+      case 'CLEAR_RESULT':
+        result.next = { ...prevState, lastActionResult: null };
         break;
     }
 
-    // --- Unified Completion Pass ---
+    // Surgical Completion Pass
     const groupCounts: Record<string, number> = {};
-    nextState.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
+    result.next.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
     const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === prevState.gridSize).map(([gid]) => gid);
     
     if (finishedGids.length > 0) {
       const newCats: string[] = [];
-      const updatedTiles = nextState.tiles.map(t => {
+      const updatedTiles = result.next.tiles.map(t => {
         if (t.userGroupId && finishedGids.includes(t.userGroupId)) {
-          const groupTiles = nextState.tiles.filter(gt => gt.userGroupId === t.userGroupId && !gt.locked);
+          const groupTiles = result.next.tiles.filter(gt => gt.userGroupId === t.userGroupId && !gt.locked);
           if (groupTiles.every(gt => gt.realCategory === groupTiles[0].realCategory)) {
             if (!newCats.includes(t.realCategory)) newCats.push(t.realCategory);
             return { ...t, locked: true, userGroupId: null };
@@ -160,49 +144,42 @@ export function useGameLogic(initialRoomCode: string | null) {
         }
         return t;
       });
-      nextState = { ...nextState, completedCategories: [...nextState.completedCategories, ...newCats.filter(c => !nextState.completedCategories.includes(c))], tiles: updatedTiles };
+      result.next = { ...result.next, completedCategories: [...result.next.completedCategories, ...newCats.filter(c => !result.next.completedCategories.includes(c))], tiles: updatedTiles };
     }
 
-    return { next: nextState, success };
+    // Atomic Feedback Payload
+    if (!prevState.roomCode) {
+      let involvedTileIds: string[] | undefined = undefined;
+      if (action.type === 'MERGE_TILES') involvedTileIds = [action.payload.tile1Id, action.payload.tile2Id];
+      else if (action.type === 'TAG_TILE') involvedTileIds = [action.payload.tileId];
+      
+      result.next.lastActionResult = { success: result.success, actionType: action.type, involvedTileIds };
+    }
+
+    return result;
   }, []);
 
-  // --- STABLE ACTION HANDLERS ---
-
-  const onStateUpdate = useCallback((newState: GameState) => {
-    isRemoteUpdate.current = true;
-    setState(newState);
-    setIsPlaying(true);
-    setTimeout(() => { isRemoteUpdate.current = false; }, 200);
-  }, []);
-
-  const onRemoteAction = useCallback((action: GameAction) => {
-    setState(prev => applyActionToState(action, prev).next);
-  }, [applyActionToState]);
+  // --- HANDLERS ---
 
   const onActionResult = useCallback((response: ActionResponse) => {
-    setLastActionResult(response);
-    setTimeout(() => setLastActionResult(null), 1000);
+    setState(prev => ({ ...prev, lastActionResult: response }));
+    setTimeout(() => setState(prev => ({ ...prev, lastActionResult: null })), 1500);
   }, []);
 
-  const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, () => isPlaying ? stateRef.current : null, onRemoteAction, onActionResult);
+  const { dispatchAction, isHost } = useSocket(state.roomCode, (ns) => { isRemoteUpdate.current = true; setState(ns); setIsPlaying(true); setTimeout(() => { isRemoteUpdate.current = false; }, 200); }, () => isPlaying ? stateRef.current : null, (a) => setState(prev => applyActionToState(a, prev).next), onActionResult);
 
   const handleAction = useCallback((action: GameAction) => {
+    const startTime = performance.now();
     setState(prev => {
       const result = applyActionToState(action, prev);
-      if (!stateRef.current.roomCode) {
-        let involvedTileIds: string[] | undefined = undefined;
-        if (action.type === 'MERGE_TILES') involvedTileIds = [action.payload.tile1Id, action.payload.tile2Id];
-        else if (action.type === 'TAG_TILE') involvedTileIds = [action.payload.tileId];
-        setLastActionResult({ success: result.success, actionType: action.type, involvedTileIds });
-        setTimeout(() => setLastActionResult(null), 1000);
-      }
       return result.next;
     });
     if (stateRef.current.roomCode) dispatchAction(action);
+    const endTime = performance.now();
+    console.log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
   }, [dispatchAction, applyActionToState]);
 
-  // --- PUBLIC MODULAR API ---
-
+  // PUBLIC MODULAR API
   const game = useMemo(() => ({
     merge: (t1: string, t2: string) => handleAction({ type: 'MERGE_TILES', payload: { tile1Id: t1, tile2Id: t2, newGroupColor: getRandomColor(stateRef.current.userGroups.map(g => g.color)), newGroupId: Math.random().toString(36).substring(2, 9) } }),
     tag: (tileId: string, groupId: string | null) => handleAction({ type: 'TAG_TILE', payload: { tileId, groupId, newGroupId: Math.random().toString(36).substring(2, 9) } }),
@@ -233,7 +210,7 @@ export function useGameLogic(initialRoomCode: string | null) {
         }
       }
       for (let i = initialTiles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]]; }
-      const newState: GameState = { roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, gridSize: x, tiles: initialTiles, userGroups: [], completedCategories: [], mistakes: 0, score: 0, tilesPerRow: x, autoRefill: false };
+      const newState: GameState = { roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, gridSize: x, tiles: initialTiles, userGroups: [], completedCategories: [], mistakes: 0, score: 0, tilesPerRow: x, autoRefill: false, lastActionResult: null };
       setState(newState); setIsPlaying(true);
       if (multi) router.push(`/?room=${newState.roomCode}`); else router.push('/');
     },
@@ -267,5 +244,25 @@ export function useGameLogic(initialRoomCode: string | null) {
     return state.userGroups.map(g => ({ ...g, count: stats[g.id] })).filter(g => g.count > 0).sort((a, b) => b.lastUpdated - a.lastUpdated);
   }, [state.tiles, state.userGroups]);
 
-  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, lastActionResult, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles };
+  const groupIdMap = useMemo(() => {
+    const map: Record<string, UserGroup> = {};
+    state.userGroups.forEach(g => map[g.id] = g);
+    return map;
+  }, [state.userGroups]);
+
+  const groupItemMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    state.tiles.forEach(t => { if (t.userGroupId && !t.hidden) { if (!map[t.userGroupId]) map[t.userGroupId] = t.text; else map[t.userGroupId] += ', ' + t.text; } });
+    return map;
+  }, [state.tiles]);
+
+  const solvedItemMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    state.completedCategories.forEach(cat => { map[cat] = state.tiles.filter(t => t.realCategory === cat && !t.hidden).map(t => t.text).join(', '); });
+    return map;
+  }, [state.completedCategories, state.tiles]);
+
+  const activeTiles = useMemo(() => state.tiles.filter(t => !t.locked), [state.tiles]);
+
+  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles };
 }
