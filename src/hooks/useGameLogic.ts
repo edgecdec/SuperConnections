@@ -210,12 +210,18 @@ export function useGameLogic(initialRoomCode: string | null) {
     setIsLoaded(true);
   }, [initialRoomCode, isLoaded]);
 
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   useEffect(() => {
     if (isPlaying && !state.roomCode) {
-      localStorage.setItem('superConnectionsState', JSON.stringify({ ...state, isPlaying: true }));
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        localStorage.setItem('superConnectionsState', JSON.stringify({ ...state, isPlaying: true }));
+      }, 1000);
     } else if (!isPlaying && !state.roomCode) {
       localStorage.removeItem('superConnectionsState');
     }
+    return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
   }, [state, isPlaying]);
 
   const handleAction = useCallback((action: GameAction) => {

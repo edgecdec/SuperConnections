@@ -170,7 +170,7 @@ app.prepare().then(() => {
             case 'RENAME_GROUP': {
                 const { groupId, newName } = action.payload;
                 const group = state.userGroups.find(g => g.id === groupId);
-                if (group) { group.name = newName; stateChanged = true; }
+                if (group) { group.name = newName; stateChanged = true; actionResult = { success: true, actionType: action.type }; }
                 else { actionResult = { success: false, actionType: action.type, message: 'Group not found' }; }
                 break;
             }
@@ -178,14 +178,17 @@ app.prepare().then(() => {
                 const { tileId, groupId, newGroupId } = action.payload;
                 const tile = state.tiles.find(t => t.id === tileId);
                 if (tile) {
-                    if (groupId === null) { tile.userGroupId = null; stateChanged = true; }
+                    if (groupId === null) { tile.userGroupId = null; stateChanged = true; actionResult = { success: true, actionType: action.type }; }
                     else {
                         const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
                         if (primary) {
                             const success = performMerge(state, primary.id, tileId, '#fff', newGroupId);
                             actionResult = { success, actionType: action.type, message: success ? 'Tagged!' : 'Incorrect match!' };
                             stateChanged = true;
-                        } else { tile.userGroupId = groupId; stateChanged = true; }
+                        } else { 
+                            tile.userGroupId = groupId; stateChanged = true; 
+                            actionResult = { success: true, actionType: action.type };
+                        }
                     }
                 }
                 break;
@@ -195,6 +198,7 @@ app.prepare().then(() => {
                 if (!state.userGroups.find(g => g.id === group.id)) state.userGroups.push(group);
                 if (tileId) { const t = state.tiles.find(tile => tile.id === tileId); if (t) t.userGroupId = group.id; }
                 stateChanged = true;
+                actionResult = { success: true, actionType: action.type };
                 break;
             }
             case 'REFILL_BOARD': {
@@ -202,12 +206,14 @@ app.prepare().then(() => {
                 const locked = state.tiles.filter(t => t.locked);
                 state.tiles = [...unlocked, ...locked];
                 stateChanged = true;
+                actionResult = { success: true, actionType: action.type };
                 break;
             }
             case 'UPDATE_SETTINGS': {
                 if (action.payload.tilesPerRow !== undefined) state.tilesPerRow = action.payload.tilesPerRow;
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
                 stateChanged = true;
+                actionResult = { success: true, actionType: action.type };
                 break;
             }
         }

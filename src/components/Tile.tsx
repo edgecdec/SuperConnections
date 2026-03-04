@@ -13,7 +13,7 @@ interface TileProps {
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
-  allTiles?: Tile[];
+  tooltipText: string;
 }
 
 export const TileComponent = React.memo(({
@@ -26,7 +26,7 @@ export const TileComponent = React.memo(({
   onDragStart,
   onDragOver,
   onDrop,
-  allTiles = []
+  tooltipText
 }: TileProps) => {
   let displayText = tile.text;
   if (tile.itemCount > 2) {
@@ -35,13 +35,8 @@ export const TileComponent = React.memo(({
      displayText = `${groupName}: ${firstItem}...`;
   }
 
-  // Find all items in this group across all tiles if needed
-  const tooltipContent = group 
-    ? allTiles.filter(t => t.userGroupId === group.id && !t.hidden).map(t => t.text).join(', ')
-    : tile.text;
-
   return (
-    <Tooltip title={tooltipContent} arrow placement="top" disableInteractive>
+    <Tooltip title={tooltipText} arrow placement="top" disableInteractive>
       <Paper
         elevation={isSelected ? 6 : 3}
         onClick={() => onTileClick(tile)}

@@ -68,10 +68,11 @@ function GameContent() {
   // Effect to handle success/failure toast from actions
   useEffect(() => {
     if (lastActionResult) {
+      const actionLabel = lastActionResult.actionType ? lastActionResult.actionType.replace('_', ' ') : 'Action';
       if (lastActionResult.success) {
         setToast({ 
           open: true, 
-          message: `${lastActionResult.actionType.replace('_', ' ')} Successful!`, 
+          message: `${actionLabel} Successful!`, 
           severity: 'success' 
         });
       } else {
@@ -158,6 +159,18 @@ function GameContent() {
 
   const activeTiles = useMemo(() => state.tiles.filter(t => !t.locked), [state.tiles]);
 
+  // Pre-calculate tooltips to avoid O(N^2) render performance hit
+  const groupItemMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    state.tiles.forEach(t => {
+      if (t.userGroupId && !t.hidden) {
+        if (!map[t.userGroupId]) map[t.userGroupId] = t.text;
+        else map[t.userGroupId] += ', ' + t.text;
+      }
+    });
+    return map;
+  }, [state.tiles]);
+
   const renderGame = () => (
     <Box display="flex" height="100vh" p={2} gap={2}>
       {state.roomCode && state.tiles.length === 0 ? (
@@ -200,13 +213,15 @@ function GameContent() {
               ))}
               {activeTiles.map((tile) => {
                 const isError = !lastActionResult?.success && lastActionResult?.actionType === 'MERGE_TILES';
-                // Note: Realistically we should track which specific tiles errored, but for simplicity we shake on any merge error
+                const group = state.userGroups.find(g => g.id === tile.userGroupId);
+                const tooltipText = group ? groupItemMap[group.id] : tile.text;
+
                 return tile.hidden ? 
                   <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} /> :
                   <Box key={tile.id} className={isError ? 'shake-error' : ''}>
                     <TileComponent 
                       tile={tile} 
-                      group={state.userGroups.find(g => g.id === tile.userGroupId)} 
+                      group={group}
                       gridSize={state.gridSize} 
                       isSelected={selectedTile?.id === tile.id} 
                       onMenuOpen={onMenuOpen} 
@@ -214,7 +229,7 @@ function GameContent() {
                       onDragStart={onDragStart} 
                       onDragOver={e => e.preventDefault()} 
                       onDrop={onDrop} 
-                      allTiles={state.tiles}
+                      tooltipText={tooltipText}
                     />
                   </Box>;
               })}
