@@ -37,7 +37,6 @@ export function useGameLogic(initialRoomCode: string | null) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
   
   const isRemoteUpdate = useRef(false);
   const stateRef = useRef(state);
@@ -49,18 +48,6 @@ export function useGameLogic(initialRoomCode: string | null) {
   const log = (msg: string) => {
     console.log(`[${new Date().toLocaleTimeString()}] [LOGIC] ${msg}`);
   };
-
-  // Timer Effect
-  useEffect(() => {
-    if (isPlaying && state.startTime) {
-      const interval = setInterval(() => {
-        setElapsedTime(Math.floor((Date.now() - state.startTime!) / 1000));
-      }, 1000);
-      return () => clearInterval(interval);
-    } else {
-      setElapsedTime(0);
-    }
-  }, [isPlaying, state.startTime]);
 
   // --- ATOMIC SURGICAL ENGINE ---
 
@@ -78,12 +65,13 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
 
       let newUserGroups = [...prevState.userGroups];
-      const existingGroup = newUserGroups.find(g => g.id === targetId);
+      const existingGroupIndex = newUserGroups.findIndex(g => g.id === targetId);
       
-      if (!existingGroup) {
+      if (existingGroupIndex === -1) {
         newUserGroups.push({ id: targetId as string, name: `Group ${newUserGroups.length + 1}`, color: newGroupColor, lastUpdated: Date.now() });
       } else {
-        newUserGroups = newUserGroups.map(g => g.id === targetId ? { ...g, lastUpdated: Date.now() } : g);
+        const existingGroup = newUserGroups[existingGroupIndex];
+        newUserGroups[existingGroupIndex] = { ...existingGroup, lastUpdated: Date.now() };
       }
 
       const sOldId = survivor.userGroupId;
@@ -125,9 +113,9 @@ export function useGameLogic(initialRoomCode: string | null) {
           completedCategories: [],
           mistakes: 0,
           score: 0,
-          tilesPerRow: action.payload.settings.numCategories, // Default to show categories across
+          tilesPerRow: action.payload.settings.numCategories,
           startTime: Date.now(),
-          playerStats: prevState.playerStats // Keep name if changed
+          playerStats: prevState.playerStats 
         };
         break;
       case 'MERGE_TILES': {
@@ -191,46 +179,34 @@ export function useGameLogic(initialRoomCode: string | null) {
         break;
     }
 
-    // Completion Logic
-    const groupCounts: Record<string, number> = {};
-    result.next.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
-    const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === result.next.settings.itemsPerCategory).map(([gid]) => gid);
-    
-    if (finishedGids.length > 0) {
-      const newCats: string[] = [];
-      const updatedTiles = result.next.tiles.map(t => {
-        if (t.userGroupId && finishedGids.includes(t.userGroupId)) {
-          const groupTiles = result.next.tiles.filter(gt => gt.userGroupId === t.userGroupId && !gt.locked);
-          if (groupTiles.every(gt => gt.realCategory === groupTiles[0].realCategory)) {
-            if (!newCats.includes(t.realCategory)) newCats.push(t.realCategory);
-            return { ...t, locked: true, userGroupId: null };
-          }
-        }
-        return t;
-      });
-      result.next = { ...result.next, completedCategories: [...result.next.completedCategories, ...newCats.filter(c => !result.next.completedCategories.includes(c))], tiles: updatedTiles };
-    }
-
-    if (!prevState.roomCode) {
-      let involvedTileIds: string[] | undefined = undefined;
-      if (action.type === 'MERGE_TILES') involvedTileIds = [action.payload.tile1Id, action.payload.tile2Id];
-      else if (action.type === 'TAG_TILE') involvedTileIds = [action.payload.tileId];
-      result.next.lastActionResult = { success: result.success, actionType: action.type, involvedTileIds };
+    // Completion Logic (Surgical)
+    if (result.success && (action.type === 'MERGE_TILES' || action.type === 'TAG_TILE' || action.type === 'START_GAME')) {
+      const groupCounts: Record<string, number> = {};
+      result.next.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
+      const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === result.next.settings.itemsPerCategory).map(([gid]) => gid);
       
-      // Update solo stats
-      if (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId)) {
-        const stats = result.next.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
-        if (result.success) stats.score += 1;
-        else stats.mistakes += 1;
-        stats.lastActive = Date.now();
-        result.next.playerStats = { ...result.next.playerStats, local: stats };
+      if (finishedGids.length > 0) {
+        const newCats: string[] = [];
+        const updatedTiles = result.next.tiles.map(t => {
+          if (t.userGroupId && finishedGids.includes(t.userGroupId)) {
+            const groupTiles = result.next.tiles.filter(gt => gt.userGroupId === t.userGroupId && !gt.locked);
+            if (groupTiles.every(gt => gt.realCategory === groupTiles[0].realCategory)) {
+              if (!newCats.includes(t.realCategory)) newCats.push(t.realCategory);
+              return { ...t, locked: true, userGroupId: null };
+            }
+          }
+          return t;
+        });
+        if (newCats.length > 0) {
+          result.next = { ...result.next, completedCategories: [...result.next.completedCategories, ...newCats.filter(c => !result.next.completedCategories.includes(c))], tiles: updatedTiles };
+        }
       }
     }
 
     return result;
   }, [applyMergeSurgical]);
 
-  // --- STABLE CALLBACKS FOR SOCKET ---
+  // --- STABLE CALLBACKS FOR SOCKET (CRITICAL) ---
 
   const onStateUpdate = useCallback((newState: GameState) => {
     isRemoteUpdate.current = true;
@@ -282,7 +258,40 @@ export function useGameLogic(initialRoomCode: string | null) {
       if (t2?.userGroupId) trackLocalTouch(t2.userGroupId);
     }
 
-    setState(prev => applyActionToState(action, prev).next);
+    setState(prev => {
+      const result = applyActionToState(action, prev);
+      
+      // Update solo stats and feedback
+      if (!prev.roomCode && (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId))) {
+        const currentStats = prev.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
+        const updatedStats = {
+          ...currentStats,
+          score: result.success ? currentStats.score + 1 : currentStats.score,
+          mistakes: !result.success ? currentStats.mistakes + 1 : currentStats.mistakes,
+          lastActive: Date.now()
+        };
+        
+        let involvedTileIds: string[] | undefined = undefined;
+        if (action.type === 'MERGE_TILES') involvedTileIds = [action.payload.tile1Id, action.payload.tile2Id];
+        else if (action.type === 'TAG_TILE') involvedTileIds = [action.payload.tileId];
+        
+        return {
+          ...result.next,
+          playerStats: { ...prev.playerStats, local: updatedStats },
+          lastActionResult: { success: result.success, actionType: action.type, involvedTileIds }
+        };
+      }
+
+      return result.next;
+    });
+
+    // Clear feedback after 1.5s
+    if (!stateRef.current.roomCode) {
+      setTimeout(() => {
+        setState(prev => ({ ...prev, lastActionResult: null }));
+      }, 1500);
+    }
+
     if (stateRef.current.roomCode) dispatchAction(action);
     const endTime = performance.now();
     log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
@@ -316,78 +325,36 @@ export function useGameLogic(initialRoomCode: string | null) {
         })).slice(0, numCategories);
       } else {
         const allCatNames = Object.keys(categoriesData);
-        
-        // Filter categories pool based on niche and tags
         let pool = allCatNames.filter(name => {
           const cat = categoriesData[name];
           if (!includeNiche && cat.niche) return false;
           if (activeTags.length > 0 && !cat.tags.some(tag => activeTags.includes(tag))) return false;
           return true;
         });
-
-        // Pick specific categories if pinned
         let selectedNames: string[] = [];
-        if (manualCategories.length > 0) {
-          selectedNames = manualCategories.filter(name => categoriesData[name]);
-        }
-
-        // Fill remaining slots with random selections from filtered pool
+        if (manualCategories.length > 0) { selectedNames = manualCategories.filter(name => categoriesData[name]); }
         const remainingNeeded = numCategories - selectedNames.length;
         if (remainingNeeded > 0) {
           const randomPool = pool.filter(name => !selectedNames.includes(name)).sort(() => 0.5 - Math.random());
           selectedNames = [...selectedNames, ...randomPool.slice(0, remainingNeeded)];
         }
-
         const usedItems = new Set<string>();
-        
         selectedNames.forEach(catName => {
           const cat = categoriesData[catName];
           let itemsPool = [...cat.items];
-          
-          // Difficulty Slicing (Easy = start of list, Hard = end of list, Random = shuffle)
-          if (difficulty === 'easy') {
-            // Keep original order (Apex items are first)
-          } else if (difficulty === 'hard') {
-            itemsPool = itemsPool.reverse(); // Tail items now first
-          } else {
-            itemsPool = itemsPool.sort(() => 0.5 - Math.random());
-          }
-
+          if (difficulty === 'easy') {} else if (difficulty === 'hard') { itemsPool = itemsPool.reverse(); } else { itemsPool = itemsPool.sort(() => 0.5 - Math.random()); }
           let addedItems: string[] = [];
           for (const item of itemsPool) {
             if (addedItems.length >= itemsPerCategory) break;
-            if (!usedItems.has(item.toLowerCase())) {
-              usedItems.add(item.toLowerCase());
-              addedItems.push(item);
-            }
+            if (!usedItems.has(item.toLowerCase())) { usedItems.add(item.toLowerCase()); addedItems.push(item); }
           }
-          
-          if (addedItems.length > 0) {
-            selectedCatsInfo.push({ name: catName, items: addedItems });
-          }
+          if (addedItems.length > 0) { selectedCatsInfo.push({ name: catName, items: addedItems }); }
         });
       }
 
-      // Generate Tiles from selected categories
       let initialTiles: Tile[] = [];
-      selectedCatsInfo.forEach(cat => {
-        cat.items.forEach(item => {
-          initialTiles.push({ 
-            id: Math.random().toString(36).substring(2, 9), 
-            text: item, 
-            realCategory: cat.name, 
-            userGroupId: null, 
-            locked: false, 
-            itemCount: 1 
-          });
-        });
-      });
-
-      // Final Shuffle of all tiles
-      for (let i = initialTiles.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]];
-      }
+      selectedCatsInfo.forEach(cat => { cat.items.forEach(item => { initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1 }); }); });
+      for (let i = initialTiles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]]; }
 
       const newState: GameState = { 
         roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 
@@ -418,7 +385,6 @@ export function useGameLogic(initialRoomCode: string | null) {
     quit: () => { localStorage.removeItem('superConnectionsState'); setIsPlaying(false); setState(prev => ({ ...prev, roomCode: null })); router.push('/'); }
   }), [handleAction, router]);
 
-  // Persistence
   useEffect(() => {
     if (isLoaded) return;
     const saved = localStorage.getItem('superConnectionsState');
@@ -466,6 +432,8 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, [state.completedCategories, state.tiles]);
 
   const activeTiles = useMemo(() => state.tiles.filter(t => !t.locked), [state.tiles]);
+
+  const elapsedTime = state.startTime ? Math.floor((Date.now() - state.startTime) / 1000) : 0;
 
   return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime };
 }
