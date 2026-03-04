@@ -28,9 +28,15 @@ export type GameState = {
 };
 
 export type GameAction = 
-  | { type: 'MERGE_TILES'; payload: { tile1Id: string; tile2Id: string; newGroupColor: string } }
+  | { type: 'MERGE_TILES'; payload: { tile1Id: string; tile2Id: string; newGroupColor: string; newGroupId: string } }
   | { type: 'RENAME_GROUP'; payload: { groupId: string; newName: string } }
-  | { type: 'TAG_TILE'; payload: { tileId: string; groupId: string | null } }
+  | { type: 'TAG_TILE'; payload: { tileId: string; groupId: string | null; newGroupId?: string } }
   | { type: 'CREATE_GROUP'; payload: { tileId: string | null; group: UserGroup } }
   | { type: 'REFILL_BOARD'; payload?: never }
   | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } };
+
+export type ActionResponse = {
+  success: boolean;
+  actionType: string;
+  message?: string;
+};

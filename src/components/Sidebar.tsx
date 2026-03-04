@@ -9,13 +9,14 @@ import {
   Collapse,
   Slider,
   FormControlLabel,
-  Switch
+  Switch,
+  Tooltip
 } from '@mui/material';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
-import { UserGroup } from '../types';
+import { UserGroup, Tile } from '../types';
 
 interface SidebarProps {
   score: number;
@@ -35,6 +36,7 @@ interface SidebarProps {
   onQuitGame: () => void;
   onCreateNewGroup: () => void;
   onOpenRenameDialog: (groupId: string, name: string) => void;
+  tiles: Tile[];
 }
 
 export const Sidebar = ({
@@ -54,7 +56,8 @@ export const Sidebar = ({
   onRefillBoard,
   onQuitGame,
   onCreateNewGroup,
-  onOpenRenameDialog
+  onOpenRenameDialog,
+  tiles
 }: SidebarProps) => {
   if (!sidebarExpanded) return null;
 
@@ -140,18 +143,26 @@ export const Sidebar = ({
       </Box>
 
       <Box flex={1} sx={{ overflowY: 'auto' }}>
-        {groupStats.map((group) => (
-          <Paper
-            key={group.id}
-            sx={{ p: 1, mb: 1, backgroundColor: group.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-          >
-            <Box>
-              <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{group.name}</Typography>
-              <Typography variant="caption">{group.count} / {gridSize} items</Typography>
-            </Box>
-            <Button size="small" onClick={() => onOpenRenameDialog(group.id, group.name)}>Rename</Button>
-          </Paper>
-        ))}
+        {groupStats.map((group) => {
+          const groupItems = tiles
+            .filter(t => t.userGroupId === group.id)
+            .map(t => t.text)
+            .join(', ');
+
+          return (
+            <Tooltip key={group.id} title={groupItems} arrow placement="left" disableInteractive>
+              <Paper
+                sx={{ p: 1, mb: 1, backgroundColor: group.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                <Box>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{group.name}</Typography>
+                  <Typography variant="caption">{group.count} / {gridSize} items</Typography>
+                </Box>
+                <Button size="small" onClick={() => onOpenRenameDialog(group.id, group.name)}>Rename</Button>
+              </Paper>
+            </Tooltip>
+          );
+        })}
         {groupStats.length === 0 && (
           <Typography variant="body2" color="textSecondary">No groups created yet. Click the tag icon on a tile to start grouping!</Typography>
         )}
@@ -159,3 +170,4 @@ export const Sidebar = ({
     </Paper>
   );
 };
+

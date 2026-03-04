@@ -72,20 +72,27 @@ function GameContent() {
 
   const onTileClick = useCallback((tile: Tile) => {
     if (tile.locked) return;
-    setSelectedTile((prev) => {
-      if (prev?.id === tile.id) return null;
-      if (!prev) return tile;
-      handleAction({ 
-        type: 'MERGE_TILES', 
-        payload: { 
-          tile1Id: tile.id, // Second click (survivor)
-          tile2Id: prev.id, // First click (being merged)
-          newGroupColor: getRandomColor(state.userGroups.map(g => g.color))
-        } 
-      });
-      return null;
-    });
-  }, [handleAction, setSelectedTile, state.userGroups]);
+    if (selectedTile) {
+      if (selectedTile.id === tile.id) {
+        setSelectedTile(null);
+      } else {
+        const newGroupId = Math.random().toString(36).substring(2, 9);
+        handleAction({ 
+          type: 'MERGE_TILES', 
+          payload: { 
+            tile1Id: tile.id, 
+            tile2Id: selectedTile.id, 
+            newGroupColor: getRandomColor(state.userGroups.map(g => g.color)),
+            newGroupId
+          } 
+        });
+        setSelectedTile(null);
+        setToast({ open: true, message: 'Merging tiles...', severity: 'info' });
+      }
+    } else {
+      setSelectedTile(tile);
+    }
+  }, [selectedTile, handleAction, state.userGroups]);
 
   const onDragStart = useCallback((e: React.DragEvent, tile: Tile) => {
     if (tile.locked) return;
@@ -97,17 +104,20 @@ function GameContent() {
     if (targetTile.locked) return;
     try {
       const draggedTile = JSON.parse(e.dataTransfer.getData('application/json')) as Tile;
+      const newGroupId = Math.random().toString(36).substring(2, 9);
       handleAction({ 
         type: 'MERGE_TILES', 
         payload: { 
           tile1Id: targetTile.id, 
           tile2Id: draggedTile.id, 
-          newGroupColor: getRandomColor(state.userGroups.map(g => g.color))
+          newGroupColor: getRandomColor(state.userGroups.map(g => g.color)),
+          newGroupId
         } 
       });
       setSelectedTile(null);
+      setToast({ open: true, message: 'Merging tiles...', severity: 'info' });
     } catch (err) { console.error(err); }
-  }, [handleAction, setSelectedTile, state.userGroups]);
+  }, [handleAction, state.userGroups]);
 
   const renderSetup = () => (
     <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh">
@@ -148,14 +158,26 @@ function GameContent() {
               </Box>
             )}
           </Box>
-          {state.completedCategories.map(cat => (
-            <Paper key={cat} sx={{ p: 2, mb: 1, backgroundColor: '#d4edda', textAlign: 'center' }}>
-              <Typography variant="h6">{cat}</Typography>
-              <Typography variant="body2">{state.tiles.filter(t => t.realCategory === cat).map(t => t.text).join(', ')}</Typography>
-            </Paper>
-          ))}
           <Box sx={{ flexGrow: 1, overflowX: 'auto', pb: 2 }}>
             <Box display="grid" gap={1} gridTemplateColumns={`repeat(${state.tilesPerRow}, minmax(100px, 1fr))`} sx={{ minWidth: 'min-content' }}>
+              {state.completedCategories.map(cat => (
+                <Paper 
+                  key={cat} 
+                  sx={{ 
+                    gridColumn: '1 / -1', 
+                    p: 2, 
+                    mb: 1, 
+                    backgroundColor: '#d4edda', 
+                    textAlign: 'center',
+                    border: '2px solid #2e7d32'
+                  }}
+                >
+                  <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>{cat}</Typography>
+                  <Typography variant="body2">
+                    {state.tiles.filter(t => t.realCategory === cat).map(t => t.text).join(', ')}
+                  </Typography>
+                </Paper>
+              ))}
               {activeTiles.map((tile) => (
                 tile.hidden ? 
                   <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} /> :
@@ -170,6 +192,7 @@ function GameContent() {
                     onDragStart={onDragStart} 
                     onDragOver={e => e.preventDefault()} 
                     onDrop={onDrop} 
+                    allTiles={state.tiles}
                   />
               ))}
             </Box>
@@ -201,6 +224,7 @@ function GameContent() {
           setGroupToRename(newId);
           setNewGroupName(name);
           setRenameDialogOpen(true);
+          setToast({ open: true, message: 'Creating group...', severity: 'info' });
         }}
         onOpenRenameDialog={(id, name) => {
           setGroupToRename(id);
@@ -237,20 +261,30 @@ function GameContent() {
           setNewGroupName(name);
           setRenameDialogOpen(true);
           setAnchorEl(null);
+          setToast({ open: true, message: 'Creating group...', severity: 'info' });
         }}>Create New Group</MenuItem>
         <Divider />
         <MenuItem onClick={() => { handleAction({ type: 'TAG_TILE', payload: { tileId: activeTileId!, groupId: null } }); setAnchorEl(null); }}>Remove Group</MenuItem>
         {state.userGroups.slice().sort((a, b) => b.lastUpdated - a.lastUpdated).map(group => {
           const count = state.tiles.reduce((acc, t) => (t.userGroupId === group.id && !t.locked && !t.hidden) ? acc + t.itemCount : acc, 0);
           if (count === 0) return null;
-          return <MenuItem key={group.id} onClick={() => { handleAction({ type: 'TAG_TILE', payload: { tileId: activeTileId!, groupId: group.id } }); setAnchorEl(null); }}><Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: group.color, mr: 1, border: '1px solid #000' }} /><ListItemText>{group.name} ({count})</ListItemText></MenuItem>;
+          return <MenuItem key={group.id} onClick={() => { 
+            const newGroupId = Math.random().toString(36).substring(2, 9);
+            handleAction({ type: 'TAG_TILE', payload: { tileId: activeTileId!, groupId: group.id, newGroupId } }); 
+            setAnchorEl(null); 
+            setToast({ open: true, message: 'Tagging tile...', severity: 'info' });
+          }}><Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: group.color, mr: 1, border: '1px solid #000' }} /><ListItemText>{group.name} ({count})</ListItemText></MenuItem>;
         })}
       </Menu>
 
       <Dialog open={renameDialogOpen} onClose={() => setRenameDialogOpen(false)}>
         <DialogTitle>Rename Group</DialogTitle>
         <DialogContent><TextField autoFocus margin="dense" label="Group Name" fullWidth variant="standard" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} /></DialogContent>
-        <DialogActions><Button onClick={() => setRenameDialogOpen(false)}>Cancel</Button><Button onClick={() => { handleAction({ type: 'RENAME_GROUP', payload: { groupId: groupToRename!, newName: newGroupName.trim() } }); setRenameDialogOpen(false); }}>Save</Button></DialogActions>
+        <DialogActions><Button onClick={() => setRenameDialogOpen(false)}>Cancel</Button><Button onClick={() => { 
+          handleAction({ type: 'RENAME_GROUP', payload: { groupId: groupToRename!, newName: newGroupName.trim() } }); 
+          setRenameDialogOpen(false); 
+          setToast({ open: true, message: 'Renaming group...', severity: 'info' });
+        }}>Save</Button></DialogActions>
       </Dialog>
       <Snackbar open={toast.open} autoHideDuration={4000} onClose={() => setToast({ ...toast, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}><Alert severity={toast.severity} sx={{ width: '100%' }}>{toast.message}</Alert></Snackbar>
     </Box>

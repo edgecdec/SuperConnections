@@ -96,6 +96,52 @@ app.prepare().then(() => {
        }
     });
 
+    const performMerge = (state, survivorId, mergedId, newGroupColor) => {
+        const survivor = state.tiles.find(t => t.id === survivorId);
+        const merged = state.tiles.find(t => t.id === mergedId);
+
+        if (!survivor || !merged || survivor.id === mergedId || survivor.hidden || merged.hidden) return false;
+
+        if (survivor.realCategory === merged.realCategory) {
+            state.score += 1;
+            let targetId = survivor.userGroupId || merged.userGroupId;
+            
+            if (!targetId) {
+                targetId = Math.random().toString(36).substring(2, 9);
+                state.userGroups.push({ 
+                    id: targetId, 
+                    name: `Group ${state.userGroups.length + 1}`, 
+                    color: newGroupColor, 
+                    lastUpdated: Date.now() 
+                });
+            } else {
+                const group = state.userGroups.find(g => g.id === targetId);
+                if (group) group.lastUpdated = Date.now();
+            }
+
+            const sOldId = survivor.userGroupId;
+            const mOldId = merged.userGroupId;
+
+            survivor.text = survivor.text + ', ' + merged.text;
+            survivor.itemCount = survivor.itemCount + merged.itemCount;
+            survivor.userGroupId = targetId;
+
+            merged.hidden = true;
+            merged.userGroupId = targetId;
+
+            state.tiles.forEach(t => {
+                if (t.id === survivorId || t.id === mergedId) return;
+                if ((sOldId && t.userGroupId === sOldId) || (mOldId && t.userGroupId === mOldId)) {
+                    t.userGroupId = targetId;
+                }
+            });
+            return true;
+        } else {
+            state.mistakes += 1;
+            return false;
+        }
+    };
+
     socket.on('game_action', ({ code, action }) => {
         if (!code) return;
         const roomCode = code.toUpperCase();
@@ -107,52 +153,7 @@ app.prepare().then(() => {
 
         switch (action.type) {
             case 'MERGE_TILES': {
-                const { tile1Id, tile2Id } = action.payload;
-                const t1 = state.tiles.find(t => t.id === tile1Id);
-                const t2 = state.tiles.find(t => t.id === tile2Id);
-                
-                if (t1 && t2 && t1.id !== t2.id && t1.realCategory === t2.realCategory) {
-                    state.score += 1;
-                    let targetGroupId = t1.userGroupId || t2.userGroupId;
-                    
-                    if (!targetGroupId) {
-                        targetGroupId = Math.random().toString(36).substring(2, 9);
-                        state.userGroups.push({
-                            id: targetGroupId,
-                            name: `Group ${state.userGroups.length + 1}`,
-                            color: action.payload.newGroupColor,
-                            lastUpdated: Date.now()
-                        });
-                    } else {
-                        const group = state.userGroups.find(g => g.id === targetGroupId);
-                        if (group) group.lastUpdated = Date.now();
-                    }
-
-                    const t1OldGroupId = t1.userGroupId;
-                    const t2OldGroupId = t2.userGroupId;
-
-                    state.tiles = state.tiles.map(t => {
-                        if (t.id === tile2Id) return { ...t, hidden: true, userGroupId: targetGroupId };
-                        if (t.id === tile1Id) {
-                            return { 
-                                ...t, 
-                                text: t.text + ', ' + t2.text,
-                                userGroupId: targetGroupId,
-                                itemCount: t1.itemCount + t2.itemCount
-                            };
-                        }
-                        if ((t1OldGroupId && t.userGroupId === t1OldGroupId) || 
-                            (t2OldGroupId && t.userGroupId === t2OldGroupId)) {
-                            return { ...t, userGroupId: targetGroupId };
-                        }
-                        return t;
-                    });
-                    stateChanged = true;
-                } else if (t1 && t2) {
-                    state.mistakes += 1;
-                    stateChanged = true;
-                    // We broadcast the mistake update so everyone sees the counter increment
-                }
+                stateChanged = performMerge(state, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor) || true;
                 break;
             }
 
@@ -170,23 +171,17 @@ app.prepare().then(() => {
                 const { tileId, groupId } = action.payload;
                 const tile = state.tiles.find(t => t.id === tileId);
                 if (tile) {
-                    // Logic handled similar to merge if group already has tiles
-                    const existingTileInGroup = state.tiles.find(t => t.userGroupId === groupId && t.id !== tileId && !t.hidden);
-                    if (existingTileInGroup) {
-                        // Reuse merge logic if it's an existing group with tiles
-                        if (tile.realCategory === existingTileInGroup.realCategory) {
-                            state.score += 1;
-                            tile.userGroupId = groupId;
-                            // For simplicity in this action, we just group them. 
-                            // Real "merging" (absorbing text) is usually done via Drag & Drop.
-                            stateChanged = true;
+                    if (groupId === null) {
+                        tile.userGroupId = null;
+                        stateChanged = true;
+                    } else {
+                        const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
+                        if (primary) {
+                            stateChanged = performMerge(state, primary.id, tileId, '#fff') || true;
                         } else {
-                            state.mistakes += 1;
+                            tile.userGroupId = groupId;
                             stateChanged = true;
                         }
-                    } else {
-                        tile.userGroupId = groupId;
-                        stateChanged = true;
                     }
                 }
                 break;
@@ -226,23 +221,37 @@ app.prepare().then(() => {
                 return acc;
             }, {});
 
+            let completedCat = null;
+            let completedGroupId = null;
+
             for (const [groupId, count] of Object.entries(groupCounts)) {
                 if (count === state.gridSize) {
                     const groupTiles = state.tiles.filter(t => t.userGroupId === groupId && !t.locked);
-                    const firstCategory = groupTiles[0].realCategory;
-                    if (groupTiles.every(t => t.realCategory === firstCategory)) {
-                        state.completedCategories.push(firstCategory);
-                        state.tiles = state.tiles.map(t => 
-                            t.userGroupId === groupId ? { ...t, locked: true, userGroupId: null } : t
-                        );
+                    if (groupTiles.length > 0) {
+                        const firstCategory = groupTiles[0].realCategory;
+                        if (groupTiles.every(t => t.realCategory === firstCategory)) {
+                            if (!state.completedCategories.includes(firstCategory)) {
+                                completedCat = firstCategory;
+                                completedGroupId = groupId;
+                                break;
+                            }
+                        }
                     }
                 }
             }
 
+            if (completedCat && completedGroupId) {
+                state.completedCategories.push(completedCat);
+                state.tiles.forEach(t => {
+                    if (t.userGroupId === completedGroupId) {
+                        t.locked = true;
+                        t.userGroupId = null;
+                    }
+                });
+            }
+
             room.version = Date.now();
-            // Broadcast the ACTION instead of the whole state to others
             socket.to(roomCode).emit('remote_action', action);
-            // We can still occasionally emit full state if needed, but for now actions are faster
         }
     });
   });
