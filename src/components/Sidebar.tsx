@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Paper,
   Typography,
@@ -10,13 +10,19 @@ import {
   Slider,
   FormControlLabel,
   Switch,
-  Tooltip
+  Tooltip,
+  List,
+  ListItem,
+  ListItemText
 } from '@mui/material';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
-import { UserGroup } from '../types';
+import TimerIcon from '@mui/icons-material/Timer';
+import PeopleIcon from '@mui/icons-material/People';
+import { UserGroup, PlayerStats } from '../types';
+import { RenameDialog } from './RenameDialog';
 
 interface SidebarProps {
   score: number;
@@ -38,7 +44,18 @@ interface SidebarProps {
   onOpenRenameDialog: (groupId: string, name: string) => void;
   groupItemMap: Record<string, string>;
   onDropOnGroup: (e: React.DragEvent, groupId: string) => void;
+  elapsedTime: number;
+  playerStats: Record<string, PlayerStats>;
+  onSetPlayerName: (name: string) => void;
 }
+
+const formatTime = (seconds: number) => {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+};
 
 export const Sidebar = React.memo(({
   score,
@@ -59,12 +76,22 @@ export const Sidebar = React.memo(({
   onCreateNewGroup,
   onOpenRenameDialog,
   groupItemMap,
-  onDropOnGroup
+  onDropOnGroup,
+  elapsedTime,
+  playerStats,
+  onSetPlayerName
 }: SidebarProps) => {
+  const [statsExpanded, setStatsExpanded] = useState(false);
+  const [nameDialogOpen, setNameDialogOpen] = useState(false);
+  const [tempName, setTempName] = useState('');
+
   if (!sidebarExpanded) return null;
 
+  const totalPossibleScore = gridSize * (gridSize - 1);
+  const progressPercent = totalPossibleScore > 0 ? Math.round((score / totalPossibleScore) * 100) : 0;
+
   return (
-    <Paper sx={{ flex: 1, minWidth: '300px', maxWidth: '350px', p: 2, display: 'flex', flexDirection: 'column', position: 'relative' }}>
+    <Paper sx={{ flex: 1, minWidth: '300px', maxWidth: '350px', p: 2, display: 'flex', flexDirection: 'column', position: 'relative', overflowY: 'auto' }}>
       <IconButton 
         size="small" 
         onClick={() => setSidebarExpanded(false)}
@@ -72,13 +99,67 @@ export const Sidebar = React.memo(({
       >
         <ChevronRightIcon />
       </IconButton>
-      <Typography variant="h6">Score & Progress</Typography>
-      <Typography variant="body1">Score: {score} ({gridSize > 1 ? Math.round((score / (gridSize * (gridSize - 1))) * 100) : 0}%)</Typography>
+      
+      <Box display="flex" alignItems="center" gap={1} mb={1}>
+        <TimerIcon fontSize="small" color="action" />
+        <Typography variant="h6" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+          {formatTime(elapsedTime)}
+        </Typography>
+      </Box>
+
+      <Typography variant="subtitle2" color="textSecondary" gutterBottom>
+        Overall Progress: {progressPercent}%
+      </Typography>
+      
+      <Typography variant="body1">Score: {score}</Typography>
       <Typography variant="body1">Mistakes: {mistakes}</Typography>
       <Typography variant="body1">
         Completed: {completedCategories.length} / {gridSize}
       </Typography>
     
+      <Divider sx={{ my: 2 }} />
+
+      {/* NEW: Detailed Player Stats Section */}
+      <Box mb={1}>
+        <Box 
+          display="flex" 
+          justifyContent="space-between" 
+          alignItems="center" 
+          sx={{ cursor: 'pointer' }}
+          onClick={() => setStatsExpanded(!statsExpanded)}
+        >
+          <Box display="flex" alignItems="center" gap={1}>
+            <PeopleIcon fontSize="small" />
+            <Typography variant="h6">Player Stats</Typography>
+          </Box>
+          {statsExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+        </Box>
+        <Collapse in={statsExpanded}>
+          <Box sx={{ pt: 1, textAlign: 'center' }}>
+            <Button size="small" variant="outlined" onClick={() => setNameDialogOpen(true)} sx={{ mb: 1 }}>Set My Name</Button>
+          </Box>
+          <List dense>
+            {Object.entries(playerStats).map(([id, stats]) => (
+              <ListItem key={id} divider sx={{ px: 1 }}>
+                <ListItemText 
+                  primary={stats.name}
+                  secondary={`Score: ${stats.score} | Mistakes: ${stats.mistakes}`}
+                  primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
+                />
+              </ListItem>
+            ))}
+          </List>
+        </Collapse>
+      </Box>
+
+      {/* Name Change Dialog */}
+      <RenameDialog 
+        open={nameDialogOpen} 
+        onClose={() => setNameDialogOpen(false)} 
+        initialGroupName="" 
+        onSave={(name) => { onSetPlayerName(name); setNameDialogOpen(false); }}
+      />
+
       <Divider sx={{ my: 2 }} />
 
       <Box mb={2}>

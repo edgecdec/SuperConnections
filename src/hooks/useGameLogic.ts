@@ -19,12 +19,15 @@ export function useGameLogic(initialRoomCode: string | null) {
     score: 0,
     tilesPerRow: 12,
     autoRefill: false,
-    lastActionResult: null
+    lastActionResult: null,
+    startTime: null,
+    playerStats: {}
   });
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
   
   const isRemoteUpdate = useRef(false);
   const stateRef = useRef(state);
@@ -36,6 +39,18 @@ export function useGameLogic(initialRoomCode: string | null) {
   const log = (msg: string) => {
     console.log(`[${new Date().toLocaleTimeString()}] [LOGIC] ${msg}`);
   };
+
+  // Timer Effect
+  useEffect(() => {
+    if (isPlaying && state.startTime) {
+      const interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - state.startTime!) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setElapsedTime(0);
+    }
+  }, [isPlaying, state.startTime]);
 
   // --- ATOMIC SURGICAL ENGINE ---
 
@@ -137,6 +152,20 @@ export function useGameLogic(initialRoomCode: string | null) {
       case 'CLEAR_RESULT':
         result.next = { ...prevState, lastActionResult: null };
         break;
+      case 'SET_PLAYER_NAME':
+        // Only relevant if playerStats exists (multiplayer)
+        if (prevState.playerStats) {
+          const userId = Object.keys(prevState.playerStats).find(id => prevState.playerStats[id].name === 'You' || id === 'local'); // Simplified for solo
+          const targetId = userId || 'local';
+          result.next = {
+            ...prevState,
+            playerStats: {
+              ...prevState.playerStats,
+              [targetId]: { ...prevState.playerStats[targetId], name: action.payload.name }
+            }
+          };
+        }
+        break;
     }
 
     // Completion Logic
@@ -164,6 +193,15 @@ export function useGameLogic(initialRoomCode: string | null) {
       if (action.type === 'MERGE_TILES') involvedTileIds = [action.payload.tile1Id, action.payload.tile2Id];
       else if (action.type === 'TAG_TILE') involvedTileIds = [action.payload.tileId];
       result.next.lastActionResult = { success: result.success, actionType: action.type, involvedTileIds };
+      
+      // Update solo stats
+      if (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId)) {
+        const stats = result.next.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
+        if (result.success) stats.score += 1;
+        else stats.mistakes += 1;
+        stats.lastActive = Date.now();
+        result.next.playerStats = { ...result.next.playerStats, local: stats };
+      }
     }
 
     return result;
@@ -251,6 +289,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     renameGroup: (groupId: string, newName: string) => handleAction({ type: 'RENAME_GROUP', payload: { groupId, newName } }),
     updateSettings: (s: any) => handleAction({ type: 'UPDATE_SETTINGS', payload: s }),
     refill: () => handleAction({ type: 'REFILL_BOARD' }),
+    setPlayerName: (name: string) => handleAction({ type: 'SET_PLAYER_NAME', payload: { name } }),
     start: (multi: boolean, size: number) => {
       const x = Math.min(Math.max(size, 2), 50);
       const allCatNames = Object.keys(categoriesData);
@@ -267,7 +306,20 @@ export function useGameLogic(initialRoomCode: string | null) {
         }
       }
       for (let i = initialTiles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]]; }
-      const newState: GameState = { roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, gridSize: x, tiles: initialTiles, userGroups: [], completedCategories: [], mistakes: 0, score: 0, tilesPerRow: x, autoRefill: false, lastActionResult: null };
+      const newState: GameState = { 
+        roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 
+        gridSize: x, 
+        tiles: initialTiles, 
+        userGroups: [], 
+        completedCategories: [], 
+        mistakes: 0, 
+        score: 0, 
+        tilesPerRow: x, 
+        autoRefill: false, 
+        lastActionResult: null,
+        startTime: Date.now(),
+        playerStats: { local: { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() } }
+      };
       setState(newState); setIsPlaying(true);
       if (multi) router.push(`/?room=${newState.roomCode}`); else router.push('/');
     },
@@ -321,6 +373,5 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   const activeTiles = useMemo(() => state.tiles.filter(t => !t.locked), [state.tiles]);
 
-  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds };
+  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime };
 }
-

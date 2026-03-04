@@ -82,10 +82,26 @@ app.prepare().then(() => {
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
+           if (rooms[roomCode].state) {
+               rooms[roomCode].state.startTime = rooms[roomCode].state.startTime || Date.now();
+               rooms[roomCode].state.playerStats = rooms[roomCode].state.playerStats || {};
+           }
            console.log(`Room ${roomCode} created by host ${userId}`);
        } else if (rooms[roomCode].cleanupTimer) {
            clearTimeout(rooms[roomCode].cleanupTimer);
            rooms[roomCode].cleanupTimer = null;
+       }
+
+       if (rooms[roomCode].state) {
+           if (!rooms[roomCode].state.playerStats) rooms[roomCode].state.playerStats = {};
+           if (!rooms[roomCode].state.playerStats[userId]) {
+               rooms[roomCode].state.playerStats[userId] = {
+                   name: `Player ${userId.substring(0, 4)}`,
+                   score: 0,
+                   mistakes: 0,
+                   lastActive: Date.now()
+               };
+           }
        }
 
        socket.emit('init_session', { 
@@ -155,6 +171,8 @@ app.prepare().then(() => {
         const roomCode = code.toUpperCase();
         const room = rooms[roomCode];
         if (!room || !room.state) return;
+
+        if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
 
         const state = room.state;
         let stateChanged = false;
@@ -236,11 +254,31 @@ app.prepare().then(() => {
                 actionResult = { success: true, actionType: action.type };
                 break;
             }
+            case 'SET_PLAYER_NAME': {
+                if (state.playerStats && state.playerStats[userId]) {
+                    state.playerStats[userId].name = action.payload.name;
+                    stateChanged = true;
+                    actionResult = { success: true, actionType: action.type };
+                }
+                break;
+            }
         }
 
         socket.emit('action_result', actionResult);
 
         if (stateChanged) {
+            // Update contributor stats
+            if (state.playerStats && state.playerStats[userId]) {
+                state.playerStats[userId].lastActive = Date.now();
+                if (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId)) {
+                    if (actionResult.success) {
+                        state.playerStats[userId].score += 1;
+                    } else {
+                        state.playerStats[userId].mistakes += 1;
+                    }
+                }
+            }
+
             if (!actionResult.success) socket.emit('state_update', state);
 
             const groupCounts = state.tiles.reduce((acc, tile) => {
@@ -261,6 +299,7 @@ app.prepare().then(() => {
             });
 
             room.version = Date.now();
+            io.to(roomCode).emit('state_update', state);
             socket.to(roomCode).emit('remote_action', action);
         }
     });

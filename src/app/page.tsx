@@ -18,7 +18,8 @@ function GameContent() {
 
   const {
     state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile,
-    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds
+    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds,
+    elapsedTime
   } = useGameLogic(roomCodeFromUrl);
 
   const lastActionResult = state.lastActionResult;
@@ -127,6 +128,8 @@ function GameContent() {
         onOpenRenameDialog={(id, name) => { setGroupToRename(id); setInitialGroupName(name); setRenameDialogOpen(true); }}
         groupItemMap={groupItemMap}
         onDropOnGroup={onDropOnGroup}
+        elapsedTime={elapsedTime}
+        onSetPlayerName={game.setPlayerName}
       />
 
       <TileMenu 

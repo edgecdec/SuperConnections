@@ -22,6 +22,13 @@ export type ActionResponse = {
   involvedTileIds?: string[];
 };
 
+export type PlayerStats = {
+  name: string;
+  score: number;
+  mistakes: number;
+  lastActive: number;
+};
+
 export type GameState = {
   roomCode: string | null;
   gridSize: number;
@@ -33,6 +40,8 @@ export type GameState = {
   tilesPerRow: number;
   autoRefill: boolean;
   lastActionResult: ActionResponse | null;
+  startTime: number | null;
+  playerStats: Record<string, PlayerStats>;
 };
 
 export type GameAction = 
@@ -42,4 +51,5 @@ export type GameAction =
   | { type: 'CREATE_GROUP'; payload: { tileId: string | null; group: UserGroup } }
   | { type: 'REFILL_BOARD'; payload?: never }
   | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } }
-  | { type: 'CLEAR_RESULT'; payload?: never };
+  | { type: 'CLEAR_RESULT'; payload?: never }
+  | { type: 'SET_PLAYER_NAME'; payload: { name: string } };
