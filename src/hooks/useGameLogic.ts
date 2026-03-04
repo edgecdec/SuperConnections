@@ -486,10 +486,10 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, [state.completedCategories, state.tiles]);
 
   const activeTiles = useMemo(() => {
-    return state.settings.gravity === 'up' 
-      ? state.tiles.filter(t => !t.locked && !t.hidden)
-      : state.tiles.filter(t => !t.locked);
-  }, [state.tiles, state.settings.gravity]);
+    // We must always return hidden tiles so the grid renders empty placeholders at the bottom,
+    // ensuring the columns stay vertically aligned. We only filter out fully 'locked' (solved) tiles.
+    return state.tiles.filter(t => !t.locked);
+  }, [state.tiles]);
 
   const elapsedTime = state.startTime ? Math.floor((Date.now() - state.startTime) / 1000) : 0;
 
