@@ -21,6 +21,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { GameSettings, GameDifficulty, CategoryMap } from '../types';
 import categoriesDataRaw from '../data/categories.json';
+import { CategoryPickerModal } from './CategoryPickerModal';
 
 const categoriesData = categoriesDataRaw as CategoryMap;
 
@@ -35,6 +36,7 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
   const [includeNiche, setIncludeNiche] = useState(false);
   const [activeTags, setActiveTags] = useState<string[]>([]);
   const [manualCategories, setManualCategories] = useState<string[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [popToTop, setPopToTop] = useState(true);
   const [gravity, setGravity] = useState<'none' | 'up'>('up');
   
@@ -177,23 +179,32 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
                   onChange={(e, val) => setActiveTags(val)}
                   renderInput={(params) => <TextField {...params} label="Filter by Types (Sports, Music, etc.)" />}
                   renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip label={option} {...getTagProps({ index })} size="small" />
-                    ))
+                    value.map((option, index) => {
+                      const { key, ...tagProps } = getTagProps({ index });
+                      return <Chip key={key} label={option} {...tagProps} size="small" />;
+                    })
                   }
                 />
 
-                <Autocomplete
-                  multiple
-                  options={allCategories}
-                  value={manualCategories}
-                  onChange={(e, val) => setManualCategories(val)}
-                  renderInput={(params) => <TextField {...params} label="Pin Specific Categories" />}
-                  renderTags={(value, getTagProps) =>
-                    value.map((option, index) => (
-                      <Chip label={option} {...getTagProps({ index })} size="small" color="secondary" />
-                    ))
-                  }
+                <Box>
+                  <Button 
+                    variant="outlined" 
+                    fullWidth 
+                    onClick={() => setPickerOpen(true)}
+                  >
+                    Select Specific Categories ({manualCategories.length} pinned)
+                  </Button>
+                </Box>
+
+                <CategoryPickerModal 
+                  open={pickerOpen}
+                  onClose={() => setPickerOpen(false)}
+                  categoriesData={categoriesData}
+                  selectedCategories={manualCategories}
+                  onSave={(selected) => {
+                    setManualCategories(selected);
+                    setPickerOpen(false);
+                  }}
                 />
 
                 <Divider />
