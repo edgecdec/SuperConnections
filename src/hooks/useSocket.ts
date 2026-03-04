@@ -13,11 +13,22 @@ export function useSocket(
 ) {
   const socketRef = useRef<any>(null);
   const [isHost, setIsHost] = useState(false);
+  
+  // Use Refs for all callbacks to ensure socket listeners always use the latest logic
+  // without triggering a socket reconnect cycle.
+  const onStateUpdateRef = useRef(onStateUpdate);
   const getLatestStateRef = useRef(getLatestState);
+  const onRemoteActionRef = useRef(onRemoteAction);
+  const onActionResultRef = useRef(onActionResult);
 
-  useEffect(() => {
-    getLatestStateRef.current = getLatestState;
-  }, [getLatestState]);
+  useEffect(() => { onStateUpdateRef.current = onStateUpdate; }, [onStateUpdate]);
+  useEffect(() => { getLatestStateRef.current = getLatestState; }, [getLatestState]);
+  useEffect(() => { onRemoteActionRef.current = onRemoteAction; }, [onRemoteAction]);
+  useEffect(() => { onActionResultRef.current = onActionResult; }, [onActionResult]);
+
+  const log = (msg: string) => {
+    console.log(`[${new Date().toLocaleTimeString()}] [SOCKET] ${msg}`);
+  };
 
   useEffect(() => {
     if (!roomCode) {
@@ -25,11 +36,12 @@ export function useSocket(
       return;
     }
 
+    log(`Connecting to room: ${roomCode}`);
     const socket = (io as any)();
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('Connected to socket');
+      log('Connected to socket server');
       const state = getLatestStateRef.current ? getLatestStateRef.current() : null;
       socket.emit('join_room', { 
         code: roomCode, 
@@ -38,37 +50,47 @@ export function useSocket(
     });
 
     socket.on('init_session', (data: { isHost: boolean, userId: string }) => {
-      console.log('Session initialized. Host:', data.isHost);
+      log(`Session initialized. Host: ${data.isHost}`);
       setIsHost(data.isHost);
     });
 
     socket.on('state_update', (newState: GameState) => {
-      onStateUpdate(newState);
+      log('Received full state update');
+      if (onStateUpdateRef.current) onStateUpdateRef.current(newState);
     });
 
     socket.on('remote_action', (action: GameAction) => {
-      if (onRemoteAction) onRemoteAction(action);
+      log(`Received remote action: ${action.type}`);
+      if (onRemoteActionRef.current) onRemoteActionRef.current(action);
     });
 
     socket.on('action_result', (response: ActionResponse) => {
-      if (onActionResult) onActionResult(response);
+      log(`Received action result: ${response.actionType} (${response.success ? 'Success' : 'Fail'})`);
+      if (onActionResultRef.current) onActionResultRef.current(response);
     });
 
     socket.on('request_state', () => {
+      log('Server requested latest state');
       const state = getLatestStateRef.current ? getLatestStateRef.current() : null;
       if (state && state.tiles && state.tiles.length > 0) {
         socket.emit('update_state', { code: roomCode, gameState: state, version: Date.now() });
       }
     });
 
+    socket.on('disconnect', () => {
+      log('Disconnected from socket server');
+    });
+
     return () => {
+      log('Cleaning up socket connection');
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomCode, onStateUpdate, onRemoteAction, onActionResult]);
+  }, [roomCode]); // ONLY reconnect if the roomCode changes
 
   const dispatchAction = useCallback((action: GameAction) => {
     if (socketRef.current && roomCode) {
+      log(`Dispatching action: ${action.type}`);
       socketRef.current.emit('game_action', { 
         code: roomCode, 
         action 

@@ -31,7 +31,7 @@ export const TileComponent = React.memo(({
   tooltipText
 }: TileProps) => {
   // --- PERFORMANCE LOG ---
-  console.log(`[RENDER] Tile ${tile.id}`);
+  console.log(`[${new Date().toLocaleTimeString()}] [RENDER] Tile ${tile.id}`);
   
   let displayText = tile.text;
   if (tile.itemCount > 2) {
@@ -90,22 +90,19 @@ export const TileComponent = React.memo(({
     </Tooltip>
   );
 }, (prev, next) => {
-  // SURGICAL COMPARISON LOGGING
-  const changed = [];
-  if (prev.isSelected !== next.isSelected) changed.push('isSelected');
-  if (prev.isError !== next.isError) changed.push('isError');
-  if (prev.tooltipText !== next.tooltipText) changed.push('tooltipText');
-  if (prev.tile.text !== next.tile.text) changed.push('tile.text');
-  if (prev.tile.userGroupId !== next.tile.userGroupId) changed.push('tile.userGroupId');
-  if (prev.tile.itemCount !== next.tile.itemCount) changed.push('tile.itemCount');
-  if (prev.group?.color !== next.group?.color) changed.push('group.color');
-  if (prev.group?.name !== next.group?.name) changed.push('group.name');
-  
-  if (changed.length > 0) {
-    // console.log(`[MEMO] Tile ${next.tile.id} invalidated due to: ${changed.join(', ')}`);
-    return false;
-  }
-  return true;
+  // DEEP MEMOIZATION
+  return prev.isSelected === next.isSelected &&
+         prev.isError === next.isError &&
+         prev.gridSize === next.gridSize &&
+         prev.tooltipText === next.tooltipText &&
+         prev.tile.id === next.tile.id &&
+         prev.tile.text === next.tile.text &&
+         prev.tile.userGroupId === next.tile.userGroupId &&
+         prev.tile.itemCount === next.tile.itemCount &&
+         prev.tile.locked === next.tile.locked &&
+         prev.tile.hidden === next.tile.hidden &&
+         prev.group?.color === next.group?.color &&
+         prev.group?.name === next.group?.name;
 });
 
 TileComponent.displayName = 'TileComponent';

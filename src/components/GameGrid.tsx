@@ -45,7 +45,7 @@ export const GameGrid = React.memo(({
   
   React.useEffect(() => {
     const renderEndTime = performance.now();
-    console.log(`[PERF] GameGrid render committed in ${(renderEndTime - renderStartTime).toFixed(2)}ms`);
+    console.log(`[${new Date().toLocaleTimeString()}] [PERF] GameGrid render committed in ${(renderEndTime - renderStartTime).toFixed(2)}ms`);
   });
 
   const handleDragOver = React.useCallback((e: React.DragEvent) => {
@@ -60,7 +60,6 @@ export const GameGrid = React.memo(({
     );
   }
 
-  // Pre-calculate booleans to ensure prop stability for children
   const involvedTileIds = lastActionResult?.involvedTileIds || [];
   const actionFailed = lastActionResult?.success === false;
 

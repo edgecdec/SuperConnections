@@ -33,9 +33,13 @@ export function useGameLogic(initialRoomCode: string | null) {
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { selectedTileRef.current = selectedTile; }, [selectedTile]);
 
+  const log = (msg: string) => {
+    console.log(`[${new Date().toLocaleTimeString()}] [LOGIC] ${msg}`);
+  };
+
   // --- ATOMIC SURGICAL ENGINE ---
 
-  const applyMergeSurgical = (prevState: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): { next: GameState, success: boolean } => {
+  const applyMergeSurgical = useCallback((prevState: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): { next: GameState, success: boolean } => {
     const survivor = prevState.tiles.find(t => t.id === survivorId);
     const merged = prevState.tiles.find(t => t.id === mergedId);
 
@@ -49,8 +53,9 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
 
       let newUserGroups = [...prevState.userGroups];
+      const existingGroup = newUserGroups.find(g => g.id === targetId);
       
-      if (!prevState.userGroups.find(g => g.id === targetId)) {
+      if (!existingGroup) {
         newUserGroups.push({ id: targetId as string, name: `Group ${newUserGroups.length + 1}`, color: newGroupColor, lastUpdated: Date.now() });
       } else {
         newUserGroups = newUserGroups.map(g => g.id === targetId ? { ...g, lastUpdated: Date.now() } : g);
@@ -79,7 +84,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     } else {
       return { next: { ...prevState, mistakes: prevState.mistakes + 1 }, success: false };
     }
-  };
+  }, []);
 
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
     let result: { next: GameState, success: boolean } = { next: { ...prevState, lastActionResult: null }, success: true };
@@ -99,12 +104,19 @@ export function useGameLogic(initialRoomCode: string | null) {
           const tile = prevState.tiles.find(t => t.id === tileId);
           const currentGroupId = tile?.userGroupId;
           const groupCount = currentGroupId ? prevState.tiles.reduce((acc, t) => (t.userGroupId === currentGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0) : 0;
-          if (tile && tile.itemCount === 1 && groupCount === 1) nextState: { result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null } : t) }; }
-          else result.success = false;
+          if (tile && tile.itemCount === 1 && groupCount === 1) {
+            result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null } : t) };
+          } else {
+            result.success = false;
+          }
         } else {
           const primary = prevState.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
-          if (primary) result = applyMergeSurgical(prevState, primary.id, tileId, '#fff', newGroupId);
-          else result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t) };
+          if (primary) {
+            const mergeResult = applyMergeSurgical(prevState, primary.id, tileId, '#fff', newGroupId);
+            result = { next: { ...mergeResult.next, lastActionResult: null }, success: mergeResult.success };
+          } else {
+            result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t) };
+          }
         }
         break;
       }
@@ -127,7 +139,7 @@ export function useGameLogic(initialRoomCode: string | null) {
         break;
     }
 
-    // Surgical Completion Pass
+    // Completion Logic
     const groupCounts: Record<string, number> = {};
     result.next.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
     const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === prevState.gridSize).map(([gid]) => gid);
@@ -147,26 +159,37 @@ export function useGameLogic(initialRoomCode: string | null) {
       result.next = { ...result.next, completedCategories: [...result.next.completedCategories, ...newCats.filter(c => !result.next.completedCategories.includes(c))], tiles: updatedTiles };
     }
 
-    // Atomic Feedback Payload
     if (!prevState.roomCode) {
       let involvedTileIds: string[] | undefined = undefined;
       if (action.type === 'MERGE_TILES') involvedTileIds = [action.payload.tile1Id, action.payload.tile2Id];
       else if (action.type === 'TAG_TILE') involvedTileIds = [action.payload.tileId];
-      
       result.next.lastActionResult = { success: result.success, actionType: action.type, involvedTileIds };
     }
 
     return result;
+  }, [applyMergeSurgical]);
+
+  // --- STABLE CALLBACKS FOR SOCKET (CRITICAL) ---
+
+  const onStateUpdate = useCallback((newState: GameState) => {
+    isRemoteUpdate.current = true;
+    setState(newState);
+    setIsPlaying(true);
+    setTimeout(() => { isRemoteUpdate.current = false; }, 200);
   }, []);
 
-  // --- HANDLERS ---
+  const onRemoteAction = useCallback((action: GameAction) => {
+    setState(prev => applyActionToState(action, prev).next);
+  }, [applyActionToState]);
 
   const onActionResult = useCallback((response: ActionResponse) => {
     setState(prev => ({ ...prev, lastActionResult: response }));
     setTimeout(() => setState(prev => ({ ...prev, lastActionResult: null })), 1500);
   }, []);
 
-  const { dispatchAction, isHost } = useSocket(state.roomCode, (ns) => { isRemoteUpdate.current = true; setState(ns); setIsPlaying(true); setTimeout(() => { isRemoteUpdate.current = false; }, 200); }, () => isPlaying ? stateRef.current : null, (a) => setState(prev => applyActionToState(a, prev).next), onActionResult);
+  const getLatestState = useCallback(() => isPlaying ? stateRef.current : null, [isPlaying]);
+
+  const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, getLatestState, onRemoteAction, onActionResult);
 
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
@@ -176,7 +199,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     });
     if (stateRef.current.roomCode) dispatchAction(action);
     const endTime = performance.now();
-    console.log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
+    log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
   }, [dispatchAction, applyActionToState]);
 
   // PUBLIC MODULAR API
