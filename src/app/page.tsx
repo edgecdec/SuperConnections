@@ -71,6 +71,16 @@ function GameContent() {
     } catch (err) { console.error(err); }
   }, [game]);
 
+  const onDropOnGroup = useCallback((e: React.DragEvent, groupId: string) => {
+    e.preventDefault();
+    try {
+      const draggedTileData = e.dataTransfer.getData('application/json');
+      if (!draggedTileData) return;
+      const draggedTile = JSON.parse(draggedTileData) as Tile;
+      game.tag(draggedTile.id, groupId);
+    } catch (err) { console.error(err); }
+  }, [game]);
+
   const onRenameSave = useCallback((newName: string) => {
     if (groupToRename) {
       game.renameGroup(groupToRename, newName);
@@ -116,6 +126,7 @@ function GameContent() {
         }}
         onOpenRenameDialog={(id, name) => { setGroupToRename(id); setInitialGroupName(name); setRenameDialogOpen(true); }}
         groupItemMap={groupItemMap}
+        onDropOnGroup={onDropOnGroup}
       />
 
       <TileMenu 

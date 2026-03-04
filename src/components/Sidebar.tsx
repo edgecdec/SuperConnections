@@ -37,6 +37,7 @@ interface SidebarProps {
   onCreateNewGroup: () => void;
   onOpenRenameDialog: (groupId: string, name: string) => void;
   groupItemMap: Record<string, string>;
+  onDropOnGroup: (e: React.DragEvent, groupId: string) => void;
 }
 
 export const Sidebar = React.memo(({
@@ -57,7 +58,8 @@ export const Sidebar = React.memo(({
   onQuitGame,
   onCreateNewGroup,
   onOpenRenameDialog,
-  groupItemMap
+  groupItemMap,
+  onDropOnGroup
 }: SidebarProps) => {
   if (!sidebarExpanded) return null;
 
@@ -149,7 +151,9 @@ export const Sidebar = React.memo(({
           return (
             <Tooltip key={group.id} title={groupItems} arrow placement="left" disableInteractive>
               <Paper
-                sx={{ p: 1, mb: 1, backgroundColor: group.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => onDropOnGroup(e, group.id)}
+                sx={{ p: 1, mb: 1, backgroundColor: group.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'default' }}
               >
                 <Box>
                   <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{group.name}</Typography>
