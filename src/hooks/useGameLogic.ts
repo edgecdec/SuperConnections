@@ -95,10 +95,22 @@ export function useGameLogic(initialRoomCode: string | null) {
         return t;
       });
 
-      // Feature: Pop to Top
+      // Feature: Pop to Top (of column)
       if (prevState.settings.popToTop) {
-        const survivorTile = nextTiles.find(t => t.id === survivorId)!;
-        nextTiles = [survivorTile, ...nextTiles.filter(t => t.id !== survivorId)];
+        const survivorIndex = nextTiles.findIndex(t => t.id === survivorId);
+        const survivorTile = nextTiles[survivorIndex];
+        
+        // Calculate the column index based on the current position
+        const columns = prevState.tilesPerRow;
+        const columnIdx = survivorIndex % columns;
+
+        // Create an array without the survivor tile
+        const filteredTiles = nextTiles.filter(t => t.id !== survivorId);
+        
+        // Insert the survivor tile at the very top of its column
+        // The top of column X is just index X
+        filteredTiles.splice(columnIdx, 0, survivorTile);
+        nextTiles = filteredTiles;
       }
 
       return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, success: true };
