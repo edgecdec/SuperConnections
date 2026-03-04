@@ -4,35 +4,44 @@ import { Dialog, DialogTitle, DialogContent, TextField, DialogActions, Button } 
 interface RenameDialogProps {
   open: boolean;
   onClose: () => void;
-  initialGroupName: string;
-  onSave: (newName: string) => void;
+  initialValue: string;
+  onSave: (newValue: string) => void;
+  title?: string;
+  label?: string;
 }
 
-export const RenameDialog = ({ open, onClose, initialGroupName, onSave }: RenameDialogProps) => {
-  const [name, setName] = useState(initialGroupName);
+export const RenameDialog = ({ 
+  open, 
+  onClose, 
+  initialValue, 
+  onSave, 
+  title = "Rename Group", 
+  label = "Group Name" 
+}: RenameDialogProps) => {
+  const [value, setValue] = useState(initialValue);
 
-  // Reset name when dialog opens with a new group
+  // Reset value when dialog opens
   useEffect(() => {
-    if (open) setName(initialGroupName);
-  }, [open, initialGroupName]);
+    if (open) setValue(initialValue);
+  }, [open, initialValue]);
 
   return (
     <Dialog open={open} onClose={onClose}>
-      <DialogTitle>Rename Group</DialogTitle>
+      <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <TextField 
           autoFocus 
           margin="dense" 
-          label="Group Name" 
+          label={label} 
           fullWidth 
           variant="standard" 
-          value={name} 
-          onChange={e => setName(e.target.value)} 
+          value={value} 
+          onChange={e => setValue(e.target.value)} 
         />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>Cancel</Button>
-        <Button onClick={() => onSave(name)}>Save</Button>
+        <Button onClick={() => onSave(value)}>Save</Button>
       </DialogActions>
     </Dialog>
   );

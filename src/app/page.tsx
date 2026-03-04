@@ -151,7 +151,7 @@ function GameContent() {
 
       <RenameDialog 
         open={renameDialogOpen} onClose={() => setRenameDialogOpen(false)}
-        initialGroupName={initialGroupName} onSave={onRenameSave}
+        initialValue={initialGroupName} onSave={onRenameSave}
       />
 
       <Snackbar open={toast.open} autoHideDuration={1500} onClose={() => setToast({ ...toast, open: false })} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>

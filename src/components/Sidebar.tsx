@@ -156,8 +156,10 @@ export const Sidebar = React.memo(({
       <RenameDialog 
         open={nameDialogOpen} 
         onClose={() => setNameDialogOpen(false)} 
-        initialGroupName="" 
+        initialValue="" 
         onSave={(name) => { onSetPlayerName(name); setNameDialogOpen(false); }}
+        title="Set Player Name"
+        label="Your Display Name"
       />
 
       <Divider sx={{ my: 2 }} />
