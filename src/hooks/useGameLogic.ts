@@ -8,8 +8,8 @@ import categoriesDataRaw from '../data/categories.json';
 const categoriesData = categoriesDataRaw as CategoryMap;
 
 const DEFAULT_SETTINGS: GameSettings = {
-  numCategories: 4,
-  itemsPerCategory: 4,
+  numCategories: 25,
+  itemsPerCategory: 25,
   difficulty: 'easy',
   includeNiche: false,
   activeTags: [],
@@ -20,14 +20,14 @@ export function useGameLogic(initialRoomCode: string | null) {
   const router = useRouter();
   const [state, setState] = useState<GameState>({
     roomCode: initialRoomCode,
-    gridSize: 4,
+    gridSize: 25,
     settings: DEFAULT_SETTINGS,
     tiles: [],
     userGroups: [],
     completedCategories: [],
     mistakes: 0,
     score: 0,
-    tilesPerRow: 4,
+    tilesPerRow: 25,
     autoRefill: false,
     lastActionResult: null,
     startTime: null,

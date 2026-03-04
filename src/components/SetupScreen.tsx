@@ -28,8 +28,8 @@ interface SetupScreenProps {
 }
 
 export const SetupScreen = ({ onStart }: SetupScreenProps) => {
-  const [numCategories, setNumCategories] = useState(4);
-  const [itemsPerCategory, setItemsPerCategory] = useState(4);
+  const [numCategories, setNumCategories] = useState(25);
+  const [itemsPerCategory, setItemsPerCategory] = useState(25);
   const [difficulty, setDifficulty] = useState<GameDifficulty>('easy');
   const [includeNiche, setIncludeNiche] = useState(false);
   const [activeTags, setActiveTags] = useState<string[]>([]);
@@ -46,6 +46,9 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
     Object.values(categoriesData).forEach(cat => cat.tags.forEach(t => tags.add(t)));
     return Array.from(tags).sort();
   }, []);
+
+  const numError = numCategories < 2 || numCategories > 50;
+  const itemsError = itemsPerCategory < 2 || itemsPerCategory > 50;
 
   const handleCsvUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -83,11 +86,8 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
   };
 
   const handleBegin = (multiplayer: boolean) => {
-    // If CSV data exists, we could either inject it into categoriesData or handle it specially.
-    // For now, let's assume we use the regular start but if CSV is present, we'll need to support custom tiles.
-    // Actually, simpler: if CSV is present, we override the pool in useGameLogic.
-    
-    // We'll pass a special flag or the data itself in settings for now.
+    if (numError || itemsError) return;
+
     const settings: GameSettings = {
       numCategories,
       itemsPerCategory,
@@ -98,7 +98,6 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
       customCategories: csvData || undefined
     };
     
-    // TODO: Handle CSV Data in useGameLogic. For now, just standard start.
     onStart(multiplayer, settings);
   };
 
@@ -114,14 +113,18 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
               type="number" 
               label="Number of Categories" 
               value={numCategories} 
-              onChange={e => setNumCategories(Math.min(50, Math.max(1, parseInt(e.target.value) || 0)))}
+              onChange={e => setNumCategories(parseInt(e.target.value) || 0)}
+              error={numError}
+              helperText={numError ? "Range: 2 - 50" : ""}
             />
             <TextField 
               fullWidth
               type="number" 
               label="Items per Category" 
               value={itemsPerCategory} 
-              onChange={e => setItemsPerCategory(Math.min(50, Math.max(2, parseInt(e.target.value) || 0)))}
+              onChange={e => setItemsPerCategory(parseInt(e.target.value) || 0)}
+              error={itemsError}
+              helperText={itemsError ? "Range: 2 - 50" : ""}
             />
           </Box>
 
@@ -215,6 +218,7 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
               variant="contained" 
               size="large" 
               onClick={() => handleBegin(false)}
+              disabled={numError || itemsError}
               sx={{ height: 56, borderRadius: 3 }}
             >
               Play Solo
@@ -225,6 +229,7 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
               color="primary" 
               size="large" 
               onClick={() => handleBegin(true)}
+              disabled={numError || itemsError}
               sx={{ height: 56, borderRadius: 3 }}
             >
               Host Multiplayer
@@ -234,7 +239,7 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
       </Paper>
       
       <Typography variant="caption" color="textSecondary" sx={{ mt: 4 }}>
-        Default: 4x4 Square | Max: 50x50 Massive Grid
+        Massive scaling supported from 2x2 to 50x50 grids
       </Typography>
     </Box>
   );
