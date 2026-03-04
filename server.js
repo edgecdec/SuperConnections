@@ -79,18 +79,20 @@ app.prepare().then(() => {
            rooms[roomCode] = {
                hostId: userId,
                state: initialGameState || null,
-               version: initialGameState ? Date.now() : 0
+               version: initialGameState ? Date.now() : 0,
+               cleanupTimer: null
            };
            console.log(`Room ${roomCode} created by host ${userId}`);
+       } else if (rooms[roomCode].cleanupTimer) {
+           clearTimeout(rooms[roomCode].cleanupTimer);
+           rooms[roomCode].cleanupTimer = null;
        }
 
-       // Inform the user if they are the host
        socket.emit('init_session', { 
            isHost: rooms[roomCode].hostId === userId,
            userId: userId
        });
 
-       // Send current master state to the joining user
        if (rooms[roomCode].state) {
            socket.emit('state_update', rooms[roomCode].state);
        }
@@ -125,7 +127,6 @@ app.prepare().then(() => {
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            // Update survivor
             const survivorItems = survivor.text.split(', ').map(s => s.trim());
             const mergedItems = merged.text.split(', ').map(s => s.trim());
             survivor.text = Array.from(new Set([...survivorItems, ...mergedItems])).join(', ');
@@ -157,132 +158,99 @@ app.prepare().then(() => {
 
         const state = room.state;
         let stateChanged = false;
+        let actionResult = { success: true, message: '' };
 
         switch (action.type) {
             case 'MERGE_TILES': {
-                const result = performMerge(state, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
-                socket.emit('action_result', { 
-                    success: result, 
-                    actionType: action.type, 
-                    message: result ? 'Merged!' : 'Incorrect match!' 
-                });
-                stateChanged = true; // Mistakes also count as state change
+                const success = performMerge(state, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
+                actionResult = { success, actionType: action.type, message: success ? 'Merged!' : 'Incorrect match!' };
+                stateChanged = true;
                 break;
             }
-
             case 'RENAME_GROUP': {
                 const { groupId, newName } = action.payload;
                 const group = state.userGroups.find(g => g.id === groupId);
-                if (group) {
-                    group.name = newName;
-                    stateChanged = true;
-                    socket.emit('action_result', { success: true, actionType: action.type });
-                } else {
-                    socket.emit('action_result', { success: false, actionType: action.type, message: 'Group not found' });
-                }
+                if (group) { group.name = newName; stateChanged = true; }
+                else { actionResult = { success: false, actionType: action.type, message: 'Group not found' }; }
                 break;
             }
-
             case 'TAG_TILE': {
                 const { tileId, groupId, newGroupId } = action.payload;
                 const tile = state.tiles.find(t => t.id === tileId);
                 if (tile) {
-                    if (groupId === null) {
-                        tile.userGroupId = null;
-                        stateChanged = true;
-                        socket.emit('action_result', { success: true, actionType: action.type });
-                    } else {
+                    if (groupId === null) { tile.userGroupId = null; stateChanged = true; }
+                    else {
                         const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
                         if (primary) {
-                            const result = performMerge(state, primary.id, tileId, '#fff', newGroupId);
-                            socket.emit('action_result', { 
-                                success: result, 
-                                actionType: action.type,
-                                message: result ? 'Tagged and Merged!' : 'Incorrect match!'
-                            });
+                            const success = performMerge(state, primary.id, tileId, '#fff', newGroupId);
+                            actionResult = { success, actionType: action.type, message: success ? 'Tagged!' : 'Incorrect match!' };
                             stateChanged = true;
-                        } else {
-                            tile.userGroupId = groupId;
-                            stateChanged = true;
-                            socket.emit('action_result', { success: true, actionType: action.type });
-                        }
+                        } else { tile.userGroupId = groupId; stateChanged = true; }
                     }
                 }
                 break;
             }
-
             case 'CREATE_GROUP': {
                 const { tileId, group } = action.payload;
-                const existing = state.userGroups.find(g => g.id === group.id);
-                if (!existing) {
-                    state.userGroups.push(group);
-                }
-                const tile = state.tiles.find(t => t.id === tileId);
-                if (tile) tile.userGroupId = group.id;
+                if (!state.userGroups.find(g => g.id === group.id)) state.userGroups.push(group);
+                if (tileId) { const t = state.tiles.find(tile => tile.id === tileId); if (t) t.userGroupId = group.id; }
                 stateChanged = true;
-                socket.emit('action_result', { success: true, actionType: action.type });
                 break;
             }
-
             case 'REFILL_BOARD': {
                 const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
                 const locked = state.tiles.filter(t => t.locked);
                 state.tiles = [...unlocked, ...locked];
                 stateChanged = true;
-                socket.emit('action_result', { success: true, actionType: action.type });
                 break;
             }
-
             case 'UPDATE_SETTINGS': {
                 if (action.payload.tilesPerRow !== undefined) state.tilesPerRow = action.payload.tilesPerRow;
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
                 stateChanged = true;
-                socket.emit('action_result', { success: true, actionType: action.type });
                 break;
             }
         }
 
+        socket.emit('action_result', actionResult);
+
         if (stateChanged) {
-            // Check for completed categories after any state change
+            if (!actionResult.success) socket.emit('state_update', state);
+
             const groupCounts = state.tiles.reduce((acc, tile) => {
-                if (tile.userGroupId && !tile.locked && !tile.hidden) {
-                    acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
-                }
+                if (tile.userGroupId && !tile.locked && !tile.hidden) acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
                 return acc;
             }, {});
 
-            let completedCat = null;
-            let completedGroupId = null;
-
-            for (const [groupId, count] of Object.entries(groupCounts)) {
-                if (count === state.gridSize) {
-                    const groupTiles = state.tiles.filter(t => t.userGroupId === groupId && !t.locked);
-                    if (groupTiles.length > 0) {
-                        const firstCategory = groupTiles[0].realCategory;
-                        if (groupTiles.every(t => t.realCategory === firstCategory)) {
-                            if (!state.completedCategories.includes(firstCategory)) {
-                                completedCat = firstCategory;
-                                completedGroupId = groupId;
-                                break;
-                            }
-                        }
+            const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === state.gridSize).map(([gid]) => gid);
+            finishedGids.forEach(gid => {
+                const groupTiles = state.tiles.filter(t => t.userGroupId === gid && !t.locked);
+                if (groupTiles.length > 0) {
+                    const firstCategory = groupTiles[0].realCategory;
+                    if (groupTiles.every(t => t.realCategory === firstCategory) && !state.completedCategories.includes(firstCategory)) {
+                        state.completedCategories.push(firstCategory);
+                        state.tiles.forEach(t => { if (t.userGroupId === gid) { t.locked = true; t.userGroupId = null; } });
                     }
                 }
-            }
-
-            if (completedCat && completedGroupId) {
-                state.completedCategories.push(completedCat);
-                state.tiles.forEach(t => {
-                    if (t.userGroupId === completedGroupId) {
-                        t.locked = true;
-                        t.userGroupId = null;
-                    }
-                });
-            }
+            });
 
             room.version = Date.now();
             socket.to(roomCode).emit('remote_action', action);
         }
+    });
+
+    socket.on('disconnect', () => {
+        Object.keys(rooms).forEach(roomCode => {
+            const room = io.sockets.adapter.rooms.get(roomCode);
+            if (!room || room.size === 0) {
+                if (rooms[roomCode] && !rooms[roomCode].cleanupTimer) {
+                    rooms[roomCode].cleanupTimer = setTimeout(() => {
+                        delete rooms[roomCode];
+                        console.log(`Room ${roomCode} cleaned up from memory.`);
+                    }, 1800000);
+                }
+            }
+        });
     });
   });
 

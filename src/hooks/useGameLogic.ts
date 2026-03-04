@@ -28,144 +28,154 @@ export function useGameLogic(initialRoomCode: string | null) {
   
   const isRemoteUpdate = useRef(false);
 
-  const applyMerge = useCallback((state: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): boolean => {
-    const survivor = state.tiles.find(t => t.id === survivorId);
-    const merged = state.tiles.find(t => t.id === mergedId);
+  // SURGICAL MERGE: No more deep cloning
+  const applyMergeSurgical = (prevState: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): { next: GameState, success: boolean } => {
+    const survivor = prevState.tiles.find(t => t.id === survivorId);
+    const merged = prevState.tiles.find(t => t.id === mergedId);
 
-    if (!survivor || !merged || survivor.id === mergedId || survivor.hidden || merged.hidden) return false;
+    if (!survivor || !merged || survivor.id === mergedId || survivor.hidden || merged.hidden) {
+      return { next: prevState, success: false };
+    }
 
     if (survivor.realCategory === merged.realCategory) {
-      state.score += 1;
       let targetId = survivor.userGroupId || merged.userGroupId || forceGroupId;
+      let newUserGroups = [...prevState.userGroups];
       
       if (!targetId) {
         targetId = Math.random().toString(36).substring(2, 9);
-      }
-
-      const existingGroup = state.userGroups.find(g => g.id === targetId);
-      if (!existingGroup) {
-        state.userGroups.push({ 
+        newUserGroups.push({ 
           id: targetId, 
-          name: `Group ${state.userGroups.length + 1}`, 
+          name: `Group ${newUserGroups.length + 1}`, 
           color: newGroupColor, 
           lastUpdated: Date.now() 
         });
       } else {
-        existingGroup.lastUpdated = Date.now();
+        newUserGroups = newUserGroups.map(g => g.id === targetId ? { ...g, lastUpdated: Date.now() } : g);
       }
 
       const sOldId = survivor.userGroupId;
       const mOldId = merged.userGroupId;
-// Update survivor
-const survivorItems = survivor.text.split(', ').map(s => s.trim());
-const mergedItems = merged.text.split(', ').map(s => s.trim());
-// Ensure items are unique in the combined text
-survivor.text = Array.from(new Set([...survivorItems, ...mergedItems])).join(', ');
 
-survivor.itemCount = survivor.itemCount + merged.itemCount;
-survivor.userGroupId = targetId;
-
-      merged.hidden = true;
-      merged.userGroupId = targetId;
-
-      state.tiles.forEach(t => {
-        if (t.id === survivorId || t.id === mergedId) return;
-        if ((sOldId && t.userGroupId === sOldId) || (mOldId && t.userGroupId === mOldId)) {
-          t.userGroupId = targetId;
+      const nextTiles = prevState.tiles.map(t => {
+        if (t.id === mergedId) return { ...t, hidden: true, userGroupId: targetId };
+        if (t.id === survivorId) {
+          const survivorItems = t.text.split(', ').map(s => s.trim());
+          const mergedItems = merged.text.split(', ').map(s => s.trim());
+          return { 
+            ...t, 
+            text: Array.from(new Set([...survivorItems, ...mergedItems])).join(', '),
+            itemCount: t.itemCount + merged.itemCount,
+            userGroupId: targetId
+          };
         }
+        if ((sOldId && t.userGroupId === sOldId) || (mOldId && t.userGroupId === mOldId)) {
+          return { ...t, userGroupId: targetId };
+        }
+        return t;
       });
-      return true;
+
+      return { 
+        next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, 
+        success: true 
+      };
     } else {
-      state.mistakes += 1;
-      return false;
+      return { next: { ...prevState, mistakes: prevState.mistakes + 1 }, success: false };
     }
-  }, []);
+  };
 
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
-    const next: GameState = JSON.parse(JSON.stringify(prevState));
-    let success = true;
+    let result = { next: prevState, success: true };
     
     switch (action.type) {
       case 'MERGE_TILES':
-        success = applyMerge(next, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
+        result = applyMergeSurgical(prevState, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
         break;
+      
       case 'RENAME_GROUP':
-        const group = next.userGroups.find(g => g.id === action.payload.groupId);
-        if (group) group.name = action.payload.newName;
+        result.next = {
+          ...prevState,
+          userGroups: prevState.userGroups.map(g => g.id === action.payload.groupId ? { ...g, name: action.payload.newName } : g)
+        };
         break;
+
       case 'TAG_TILE': {
-        const { tileId, groupId } = action.payload;
-        const tile = next.tiles.find(t => t.id === tileId);
-        if (tile) {
-          if (groupId === null) {
-            tile.userGroupId = null;
-          } else {
-            const primary = next.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
-            if (primary) {
-              success = applyMerge(next, primary.id, tileId, '#fff'); 
-            } else {
-              tile.userGroupId = groupId;
-            }
-          }
+        const { tileId, groupId, newGroupId } = action.payload;
+        const primary = prevState.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
+        if (primary) {
+          result = applyMergeSurgical(prevState, primary.id, tileId, '#fff', newGroupId);
+        } else {
+          result.next = {
+            ...prevState,
+            tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t)
+          };
         }
         break;
       }
+
       case 'CREATE_GROUP':
-        const existing = next.userGroups.find(g => g.id === action.payload.group.id);
-        if (!existing) next.userGroups.push(action.payload.group);
-        if (action.payload.tileId) {
-          const t = next.tiles.find(tile => tile.id === action.payload.tileId);
-          if (t) t.userGroupId = action.payload.group.id;
-        }
+        const existing = prevState.userGroups.find(g => g.id === action.payload.group.id);
+        result.next = {
+          ...prevState,
+          userGroups: existing ? prevState.userGroups : [...prevState.userGroups, action.payload.group],
+          tiles: action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id } : t) : prevState.tiles
+        };
         break;
+
       case 'REFILL_BOARD':
-        const u = next.tiles.filter(t => !t.locked && !t.hidden);
-        const l = next.tiles.filter(t => t.locked);
-        next.tiles = [...u, ...l];
+        const u = prevState.tiles.filter(t => !t.locked && !t.hidden);
+        const l = prevState.tiles.filter(t => t.locked);
+        result.next = { ...prevState, tiles: [...u, ...l] };
         break;
+
       case 'UPDATE_SETTINGS':
-        if (action.payload.tilesPerRow !== undefined) next.tilesPerRow = action.payload.tilesPerRow;
-        if (action.payload.autoRefill !== undefined) next.autoRefill = action.payload.autoRefill;
+        result.next = { 
+          ...prevState, 
+          tilesPerRow: action.payload.tilesPerRow ?? prevState.tilesPerRow,
+          autoRefill: action.payload.autoRefill ?? prevState.autoRefill
+        };
         break;
     }
 
-    // Completion Logic
+    // Completion Logic (Surgical - Handles multiple completions)
     const groupCounts: Record<string, number> = {};
-    next.tiles.forEach(tile => {
+    result.next.tiles.forEach(tile => {
         if (tile.userGroupId && !tile.locked && !tile.hidden) {
             groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount;
         }
     });
 
-    const completedCats: { cat: string, gid: string }[] = [];
-    for (const [groupId, count] of Object.entries(groupCounts)) {
-        if (count === next.gridSize) {
-            const groupTiles = next.tiles.filter(t => t.userGroupId === groupId && !t.locked);
-            if (groupTiles.length > 0) {
-                const firstCategory = groupTiles[0].realCategory;
-                if (groupTiles.every(t => t.realCategory === firstCategory)) {
-                    if (!next.completedCategories.includes(firstCategory)) {
-                        completedCats.push({ cat: firstCategory, gid: groupId });
-                    }
-                }
-            }
+    const finishedGids = Object.entries(groupCounts)
+      .filter(([gid, count]) => {
+        if (count === prevState.gridSize) {
+          const tilesInGroup = result.next.tiles.filter(t => t.userGroupId === gid && !t.locked);
+          if (tilesInGroup.length > 0) {
+            const cat = tilesInGroup[0].realCategory;
+            return tilesInGroup.every(t => t.realCategory === cat) && !prevState.completedCategories.includes(cat);
+          }
         }
+        return false;
+      })
+      .map(([gid]) => gid);
+
+    if (finishedGids.length > 0) {
+      const newCats: string[] = [];
+      const updatedTiles = result.next.tiles.map(t => {
+        if (t.userGroupId && finishedGids.includes(t.userGroupId)) {
+          if (!newCats.includes(t.realCategory)) newCats.push(t.realCategory);
+          return { ...t, locked: true, userGroupId: null };
+        }
+        return t;
+      });
+
+      result.next = {
+        ...result.next,
+        completedCategories: [...result.next.completedCategories, ...newCats.filter(c => !result.next.completedCategories.includes(c))],
+        tiles: updatedTiles
+      };
     }
 
-    completedCats.forEach(({ cat, gid }) => {
-        if (!next.completedCategories.includes(cat)) {
-            next.completedCategories.push(cat);
-        }
-        next.tiles.forEach(t => {
-          if (t.userGroupId === gid) {
-            t.locked = true;
-            t.userGroupId = null;
-          }
-        });
-    });
-
-    return { next, success };
-  }, [applyMerge]);
+    return result;
+  }, []);
 
   const onStateUpdate = useCallback((newState: GameState) => {
     isRemoteUpdate.current = true;
@@ -185,9 +195,7 @@ survivor.userGroupId = targetId;
     setTimeout(() => setLastActionResult(null), 1000);
   }, []);
 
-  const getLatestState = useCallback(() => isPlaying ? state : null, [isPlaying, state]);
-
-  const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, getLatestState, onRemoteAction, onActionResult);
+  const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, () => isPlaying ? state : null, onRemoteAction, onActionResult);
 
   useEffect(() => {
     if (isLoaded) return;
@@ -211,31 +219,53 @@ survivor.userGroupId = targetId;
   }, [state, isPlaying]);
 
   const handleAction = useCallback((action: GameAction) => {
-    const result = applyActionToState(action, state);
-    setState(result.next);
-    
-    if (!state.roomCode) {
-      setLastActionResult({ success: result.success, actionType: action.type });
-      setTimeout(() => setLastActionResult(null), 1000);
-    }
+    setState(prev => {
+      const result = applyActionToState(action, prev);
+      if (!state.roomCode) {
+        setLastActionResult({ success: result.success, actionType: action.type });
+        setTimeout(() => setLastActionResult(null), 1000);
+      }
+      return result.next;
+    });
 
     if (state.roomCode) {
       dispatchAction(action);
     }
-  }, [state, dispatchAction, applyActionToState]);
+  }, [state.roomCode, dispatchAction, applyActionToState]);
 
   const handleStart = useCallback((multiplayer: boolean, size: number) => {
     const x = Math.min(Math.max(size, 2), 50);
     const allCatNames = Object.keys(categoriesData);
     const shuffledCatNames = [...allCatNames].sort(() => 0.5 - Math.random());
-    const selectedCats = shuffledCatNames.slice(0, x);
+    
+    const usedItems = new Set<string>();
+    const selectedCats: string[] = [];
     let initialTiles: Tile[] = [];
-    selectedCats.forEach(cat => {
-      categoriesData[cat].slice(0, x).forEach(item => {
-        initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat, userGroupId: null, locked: false, itemCount: 1 });
-      });
-    });
 
+    for (const cat of shuffledCatNames) {
+      if (selectedCats.length >= x) break;
+      
+      const items = categoriesData[cat].slice(0, x);
+      // Skip category if ANY of its top items overlap with items already on the board
+      const hasOverlap = items.some(item => usedItems.has(item.toLowerCase()));
+      
+      if (!hasOverlap) {
+        selectedCats.push(cat);
+        items.forEach(item => {
+          usedItems.add(item.toLowerCase());
+          initialTiles.push({ 
+            id: Math.random().toString(36).substring(2, 9), 
+            text: item, 
+            realCategory: cat, 
+            userGroupId: null, 
+            locked: false, 
+            itemCount: 1 
+          });
+        });
+      }
+    }
+
+    // Fisher-Yates
     for (let i = initialTiles.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]];
