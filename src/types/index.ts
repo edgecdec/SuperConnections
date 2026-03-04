@@ -29,9 +29,30 @@ export type PlayerStats = {
   lastActive: number;
 };
 
+export type CategoryData = {
+  items: string[];
+  tags: string[];
+  niche: boolean;
+};
+
+export type CategoryMap = Record<string, CategoryData>;
+
+export type GameDifficulty = 'easy' | 'random' | 'hard';
+
+export type GameSettings = {
+  numCategories: number;
+  itemsPerCategory: number;
+  difficulty: GameDifficulty;
+  includeNiche: boolean;
+  activeTags: string[];
+  manualCategories: string[];
+  customCategories?: { name: string, items: string[] }[];
+};
+
 export type GameState = {
   roomCode: string | null;
-  gridSize: number;
+  gridSize: number; // For backward compatibility or general size ref
+  settings: GameSettings;
   tiles: Tile[];
   userGroups: UserGroup[];
   completedCategories: string[];
@@ -52,4 +73,5 @@ export type GameAction =
   | { type: 'REFILL_BOARD'; payload?: never }
   | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } }
   | { type: 'CLEAR_RESULT'; payload?: never }
-  | { type: 'SET_PLAYER_NAME'; payload: { name: string } };
+  | { type: 'SET_PLAYER_NAME'; payload: { name: string } }
+  | { type: 'START_GAME'; payload: { settings: GameSettings; tiles: Tile[] } };

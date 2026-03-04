@@ -82,10 +82,6 @@ app.prepare().then(() => {
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
-           if (rooms[roomCode].state) {
-               rooms[roomCode].state.startTime = rooms[roomCode].state.startTime || Date.now();
-               rooms[roomCode].state.playerStats = rooms[roomCode].state.playerStats || {};
-           }
            console.log(`Room ${roomCode} created by host ${userId}`);
        } else if (rooms[roomCode].cleanupTimer) {
            clearTimeout(rooms[roomCode].cleanupTimer);
@@ -179,6 +175,27 @@ app.prepare().then(() => {
         let actionResult = { success: true, message: '' };
 
         switch (action.type) {
+            case 'START_GAME': {
+                const { settings, tiles } = action.payload;
+                state.settings = settings;
+                state.tiles = tiles;
+                state.gridSize = settings.itemsPerCategory;
+                state.userGroups = [];
+                state.completedCategories = [];
+                state.mistakes = 0;
+                state.score = 0;
+                state.tilesPerRow = settings.numCategories;
+                state.startTime = Date.now();
+                if (state.playerStats) {
+                    Object.keys(state.playerStats).forEach(id => {
+                        state.playerStats[id].score = 0;
+                        state.playerStats[id].mistakes = 0;
+                    });
+                }
+                stateChanged = true;
+                actionResult = { success: true, actionType: action.type };
+                break;
+            }
             case 'MERGE_TILES': {
                 const success = performMerge(state, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
                 actionResult = { 
@@ -204,7 +221,6 @@ app.prepare().then(() => {
                     if (groupId === null) {
                         const currentGroupId = tile.userGroupId;
                         const groupCount = currentGroupId ? state.tiles.reduce((acc, t) => (t.userGroupId === currentGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0) : 0;
-                        
                         if (tile.itemCount === 1 && groupCount === 1) {
                             tile.userGroupId = null;
                             stateChanged = true;

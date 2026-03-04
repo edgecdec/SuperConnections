@@ -8,6 +8,7 @@ interface GameGridProps {
   roomCode: string | null;
   tiles: Tile[];
   gridSize: number;
+  numCategories: number;
   tilesPerRow: number;
   completedCategories: string[];
   activeTiles: Tile[];
@@ -27,6 +28,7 @@ export const GameGrid = React.memo(({
   roomCode,
   tiles,
   gridSize,
+  numCategories,
   tilesPerRow,
   completedCategories,
   activeTiles,
@@ -66,7 +68,7 @@ export const GameGrid = React.memo(({
   return (
     <Box flex={3} display="flex" flexDirection="column" sx={{ overflowY: 'auto' }}>
       <Box display="flex" justifyContent="space-between" alignItems="center">
-        <Typography variant="h4" gutterBottom>Super Connections ({gridSize}x{gridSize})</Typography>
+        <Typography variant="h4" gutterBottom>Super Connections ({numCategories}x{gridSize})</Typography>
         {roomCode && (
           <Box display="flex" alignItems="center" gap={1}>
             <Typography variant="h6" color="primary">Room: {roomCode}</Typography>

@@ -1,23 +1,33 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Tile, UserGroup, GameState, GameAction, ActionResponse } from '../types';
+import { Tile, UserGroup, GameState, GameAction, ActionResponse, CategoryMap, GameSettings } from '../types';
 import { useSocket } from './useSocket';
 import { getRandomColor } from '../utils/colors';
 import categoriesDataRaw from '../data/categories.json';
 
-const categoriesData = categoriesDataRaw as Record<string, string[]>;
+const categoriesData = categoriesDataRaw as CategoryMap;
+
+const DEFAULT_SETTINGS: GameSettings = {
+  numCategories: 4,
+  itemsPerCategory: 4,
+  difficulty: 'easy',
+  includeNiche: false,
+  activeTags: [],
+  manualCategories: []
+};
 
 export function useGameLogic(initialRoomCode: string | null) {
   const router = useRouter();
   const [state, setState] = useState<GameState>({
     roomCode: initialRoomCode,
     gridSize: 4,
+    settings: DEFAULT_SETTINGS,
     tiles: [],
     userGroups: [],
     completedCategories: [],
     mistakes: 0,
     score: 0,
-    tilesPerRow: 12,
+    tilesPerRow: 4,
     autoRefill: false,
     lastActionResult: null,
     startTime: null,
@@ -105,6 +115,21 @@ export function useGameLogic(initialRoomCode: string | null) {
     let result: { next: GameState, success: boolean } = { next: { ...prevState, lastActionResult: null }, success: true };
     
     switch (action.type) {
+      case 'START_GAME':
+        result.next = {
+          ...prevState,
+          settings: action.payload.settings,
+          tiles: action.payload.tiles,
+          gridSize: action.payload.settings.itemsPerCategory,
+          userGroups: [],
+          completedCategories: [],
+          mistakes: 0,
+          score: 0,
+          tilesPerRow: action.payload.settings.numCategories, // Default to show categories across
+          startTime: Date.now(),
+          playerStats: prevState.playerStats // Keep name if changed
+        };
+        break;
       case 'MERGE_TILES': {
         const mergeResult = applyMergeSurgical(prevState, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
         result = { next: { ...mergeResult.next, lastActionResult: null }, success: mergeResult.success };
@@ -153,15 +178,13 @@ export function useGameLogic(initialRoomCode: string | null) {
         result.next = { ...prevState, lastActionResult: null };
         break;
       case 'SET_PLAYER_NAME':
-        // Only relevant if playerStats exists (multiplayer)
         if (prevState.playerStats) {
-          const userId = Object.keys(prevState.playerStats).find(id => prevState.playerStats[id].name === 'You' || id === 'local'); // Simplified for solo
-          const targetId = userId || 'local';
+          const localId = Object.keys(prevState.playerStats).find(id => id === 'local') || 'local';
           result.next = {
             ...prevState,
             playerStats: {
               ...prevState.playerStats,
-              [targetId]: { ...prevState.playerStats[targetId], name: action.payload.name }
+              [localId]: { ...prevState.playerStats[localId], name: action.payload.name }
             }
           };
         }
@@ -171,7 +194,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     // Completion Logic
     const groupCounts: Record<string, number> = {};
     result.next.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
-    const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === prevState.gridSize).map(([gid]) => gid);
+    const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === result.next.settings.itemsPerCategory).map(([gid]) => gid);
     
     if (finishedGids.length > 0) {
       const newCats: string[] = [];
@@ -207,7 +230,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     return result;
   }, [applyMergeSurgical]);
 
-  // --- STABLE CALLBACKS FOR SOCKET (CRITICAL) ---
+  // --- STABLE CALLBACKS FOR SOCKET ---
 
   const onStateUpdate = useCallback((newState: GameState) => {
     isRemoteUpdate.current = true;
@@ -235,11 +258,7 @@ export function useGameLogic(initialRoomCode: string | null) {
   useEffect(() => {
     const saved = localStorage.getItem('superConnectionsLocalTouches');
     if (saved) {
-      try {
-        setLocalTouchedGroupIds(JSON.parse(saved));
-      } catch (e) {
-        console.error('Failed to load local touches', e);
-      }
+      try { setLocalTouchedGroupIds(JSON.parse(saved)); } catch (e) { console.error('Failed to load local touches', e); }
     }
   }, []);
 
@@ -253,8 +272,6 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
-    
-    // Track local touches for group-related actions
     if (action.type === 'TAG_TILE' && action.payload.groupId) trackLocalTouch(action.payload.groupId);
     if (action.type === 'RENAME_GROUP') trackLocalTouch(action.payload.groupId);
     if (action.type === 'CREATE_GROUP') trackLocalTouch(action.payload.group.id);
@@ -265,10 +282,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       if (t2?.userGroupId) trackLocalTouch(t2.userGroupId);
     }
 
-    setState(prev => {
-      const result = applyActionToState(action, prev);
-      return result.next;
-    });
+    setState(prev => applyActionToState(action, prev).next);
     if (stateRef.current.roomCode) dispatchAction(action);
     const endTime = performance.now();
     log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
@@ -290,38 +304,116 @@ export function useGameLogic(initialRoomCode: string | null) {
     updateSettings: (s: any) => handleAction({ type: 'UPDATE_SETTINGS', payload: s }),
     refill: () => handleAction({ type: 'REFILL_BOARD' }),
     setPlayerName: (name: string) => handleAction({ type: 'SET_PLAYER_NAME', payload: { name } }),
-    start: (multi: boolean, size: number) => {
-      const x = Math.min(Math.max(size, 2), 50);
-      const allCatNames = Object.keys(categoriesData);
-      const shuffledCatNames = [...allCatNames].sort(() => 0.5 - Math.random());
-      const usedItems = new Set<string>();
-      const selectedCats: string[] = [];
-      let initialTiles: Tile[] = [];
-      for (const cat of shuffledCatNames) {
-        if (selectedCats.length >= x) break;
-        const items = categoriesData[cat].slice(0, x);
-        if (!items.some(item => usedItems.has(item.toLowerCase()))) {
-          selectedCats.push(cat);
-          items.forEach(item => { usedItems.add(item.toLowerCase()); initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat, userGroupId: null, locked: false, itemCount: 1 }); });
+    start: (multi: boolean, settings: GameSettings) => {
+      const { numCategories, itemsPerCategory, difficulty, includeNiche, activeTags, manualCategories, customCategories } = settings;
+      
+      let selectedCatsInfo: { name: string, items: string[] }[] = [];
+
+      if (customCategories && customCategories.length > 0) {
+        selectedCatsInfo = customCategories.map(c => ({
+          name: c.name,
+          items: c.items.slice(0, itemsPerCategory)
+        })).slice(0, numCategories);
+      } else {
+        const allCatNames = Object.keys(categoriesData);
+        
+        // Filter categories pool based on niche and tags
+        let pool = allCatNames.filter(name => {
+          const cat = categoriesData[name];
+          if (!includeNiche && cat.niche) return false;
+          if (activeTags.length > 0 && !cat.tags.some(tag => activeTags.includes(tag))) return false;
+          return true;
+        });
+
+        // Pick specific categories if pinned
+        let selectedNames: string[] = [];
+        if (manualCategories.length > 0) {
+          selectedNames = manualCategories.filter(name => categoriesData[name]);
         }
+
+        // Fill remaining slots with random selections from filtered pool
+        const remainingNeeded = numCategories - selectedNames.length;
+        if (remainingNeeded > 0) {
+          const randomPool = pool.filter(name => !selectedNames.includes(name)).sort(() => 0.5 - Math.random());
+          selectedNames = [...selectedNames, ...randomPool.slice(0, remainingNeeded)];
+        }
+
+        const usedItems = new Set<string>();
+        
+        selectedNames.forEach(catName => {
+          const cat = categoriesData[catName];
+          let itemsPool = [...cat.items];
+          
+          // Difficulty Slicing (Easy = start of list, Hard = end of list, Random = shuffle)
+          if (difficulty === 'easy') {
+            // Keep original order (Apex items are first)
+          } else if (difficulty === 'hard') {
+            itemsPool = itemsPool.reverse(); // Tail items now first
+          } else {
+            itemsPool = itemsPool.sort(() => 0.5 - Math.random());
+          }
+
+          let addedItems: string[] = [];
+          for (const item of itemsPool) {
+            if (addedItems.length >= itemsPerCategory) break;
+            if (!usedItems.has(item.toLowerCase())) {
+              usedItems.add(item.toLowerCase());
+              addedItems.push(item);
+            }
+          }
+          
+          if (addedItems.length > 0) {
+            selectedCatsInfo.push({ name: catName, items: addedItems });
+          }
+        });
       }
-      for (let i = initialTiles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]]; }
+
+      // Generate Tiles from selected categories
+      let initialTiles: Tile[] = [];
+      selectedCatsInfo.forEach(cat => {
+        cat.items.forEach(item => {
+          initialTiles.push({ 
+            id: Math.random().toString(36).substring(2, 9), 
+            text: item, 
+            realCategory: cat.name, 
+            userGroupId: null, 
+            locked: false, 
+            itemCount: 1 
+          });
+        });
+      });
+
+      // Final Shuffle of all tiles
+      for (let i = initialTiles.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]];
+      }
+
       const newState: GameState = { 
         roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 
-        gridSize: x, 
+        gridSize: itemsPerCategory, 
+        settings, 
         tiles: initialTiles, 
         userGroups: [], 
         completedCategories: [], 
         mistakes: 0, 
         score: 0, 
-        tilesPerRow: x, 
+        tilesPerRow: numCategories, 
         autoRefill: false, 
         lastActionResult: null,
         startTime: Date.now(),
-        playerStats: { local: { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() } }
+        playerStats: { local: { name: stateRef.current.playerStats['local']?.name || 'You', score: 0, mistakes: 0, lastActive: Date.now() } }
       };
-      setState(newState); setIsPlaying(true);
-      if (multi) router.push(`/?room=${newState.roomCode}`); else router.push('/');
+
+      if (multi) {
+        setState(newState);
+        handleAction({ type: 'START_GAME', payload: { settings, tiles: initialTiles } });
+        router.push(`/?room=${newState.roomCode}`);
+      } else {
+        setState(newState);
+        setIsPlaying(true);
+        router.push('/');
+      }
     },
     quit: () => { localStorage.removeItem('superConnectionsState'); setIsPlaying(false); setState(prev => ({ ...prev, roomCode: null })); router.push('/'); }
   }), [handleAction, router]);
@@ -331,8 +423,10 @@ export function useGameLogic(initialRoomCode: string | null) {
     if (isLoaded) return;
     const saved = localStorage.getItem('superConnectionsState');
     if (saved) {
-      const parsed = JSON.parse(saved);
-      if (parsed.isPlaying && (!initialRoomCode || parsed.roomCode === initialRoomCode)) { setState(parsed); setIsPlaying(true); }
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.isPlaying && (!initialRoomCode || parsed.roomCode === initialRoomCode)) { setState(parsed); setIsPlaying(true); }
+      } catch (e) {}
     }
     setIsLoaded(true);
   }, [initialRoomCode, isLoaded]);

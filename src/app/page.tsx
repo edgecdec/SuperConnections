@@ -2,7 +2,8 @@
 
 import React, { useState, useCallback, Suspense, useMemo, useEffect, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Container, Snackbar, Alert, Box } from '@mui/material';
+import { Container, Snackbar, Alert, Box, Paper, Typography, IconButton } from '@mui/material';
+import MenuIcon from '@mui/icons-material/Menu';
 
 import { Tile } from '../types';
 import { useGameLogic } from '../hooks/useGameLogic';
@@ -18,13 +19,11 @@ function GameContent() {
 
   const {
     state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile,
-    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds,
-    elapsedTime
+    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime
   } = useGameLogic(roomCodeFromUrl);
 
   const lastActionResult = state.lastActionResult;
 
-  const [gridSizeInput, setGridSizeInput] = useState<number>(state.gridSize);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
 
@@ -108,7 +107,8 @@ function GameContent() {
   const renderGame = () => (
     <Box display="flex" height="100vh" p={2} gap={2}>
       <GameGrid 
-        roomCode={state.roomCode} tiles={state.tiles} gridSize={state.gridSize} tilesPerRow={state.tilesPerRow}
+        roomCode={state.roomCode} tiles={state.tiles} gridSize={state.gridSize} 
+        numCategories={state.settings.numCategories} tilesPerRow={state.tilesPerRow}
         completedCategories={state.completedCategories} activeTiles={activeTiles} selectedTile={selectedTile}
         lastActionResult={lastActionResult} groupIdMap={groupIdMap} groupItemMap={groupItemMap} solvedItemMap={solvedItemMap}
         onCopyRoomLink={handleCopyRoomLink} onMenuOpen={onMenuOpen} onTileClick={onTileClick} onDragStart={onDragStart} onDrop={onDrop}
@@ -131,6 +131,19 @@ function GameContent() {
         elapsedTime={elapsedTime}
         onSetPlayerName={game.setPlayerName}
       />
+
+      {!sidebarExpanded && (
+        <Box sx={{ position: 'absolute', top: 16, right: 16, zIndex: 100 }}>
+          <Paper sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255, 255, 255, 0.95)', boxShadow: 3 }}>
+            <Box display="flex" gap={2}>
+              <Typography variant="body2">Score: {state.score}</Typography>
+              <Typography variant="body2" color="error">Mistakes: {state.mistakes}</Typography>
+              <Typography variant="body2">Progress: {Math.round((state.score / (state.gridSize * (state.gridSize - 1))) * 100)}%</Typography>
+            </Box>
+            <IconButton size="small" onClick={() => setSidebarExpanded(true)}><MenuIcon /></IconButton>
+          </Paper>
+        </Box>
+      )}
 
       <TileMenu 
         open={taggingDialogOpen}
@@ -163,7 +176,7 @@ function GameContent() {
   return (
     <Container maxWidth={false} disableGutters>
       {!isPlaying ? (
-        <SetupScreen gridSizeInput={gridSizeInput} setGridSizeInput={setGridSizeInput} onStart={game.start} />
+        <SetupScreen onStart={game.start} />
       ) : renderGame()}
     </Container>
   );
