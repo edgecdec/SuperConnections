@@ -160,11 +160,17 @@ app.prepare().then(() => {
                 }
             });
 
-            // Feature: Pop to Top
+            // Feature: Pop to Top (of column)
             if (state.settings && state.settings.popToTop) {
-                const survivorTile = state.tiles.find(t => t.id === survivorId);
-                if (survivorTile) {
-                    state.tiles = [survivorTile, ...state.tiles.filter(t => t.id !== survivorId)];
+                const survivorIndex = state.tiles.findIndex(t => t.id === survivorId);
+                if (survivorIndex !== -1) {
+                    const survivorTile = state.tiles[survivorIndex];
+                    const columns = state.tilesPerRow || 25;
+                    const columnIdx = survivorIndex % columns;
+                    
+                    const filteredTiles = state.tiles.filter(t => t.id !== survivorId);
+                    filteredTiles.splice(columnIdx, 0, survivorTile);
+                    state.tiles = filteredTiles;
                 }
             }
 
