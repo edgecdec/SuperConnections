@@ -969,7 +969,7 @@
                                  ]
                    },
     "Over the Counter Medications":  {
-                                         "niche":  true,
+                                         "niche":  false,
                                          "tags":  [
                                                       "Medicine"
                                                   ],
@@ -1186,7 +1186,7 @@
                                 ]
                   },
     "Bones and Body Parts":  {
-                                 "niche":  true,
+                                 "niche":  false,
                                  "tags":  [
                                               "Science",
                                               "Academic"
@@ -2974,7 +2974,7 @@
                                 ]
                   },
     "Botanical Bulbs":  {
-                            "niche":  true,
+                            "niche":  false,
                             "tags":  [
                                          "Nature"
                                      ],
@@ -3297,7 +3297,7 @@
                                                       ]
                                         },
     "Non-US UNESCO World Heritage":  {
-                                         "niche":  true,
+                                         "niche":  false,
                                          "tags":  [
                                                       "Geography",
                                                       "History"
@@ -3947,7 +3947,7 @@
                                                    ]
                                      },
     "Constellations":  {
-                           "niche":  true,
+                           "niche":  false,
                            "tags":  [
                                         "Science",
                                         "Nature"
@@ -4868,7 +4868,7 @@
                                       ]
                         },
     "People and Cities in the Bible":  {
-                                           "niche":  true,
+                                           "niche":  false,
                                            "tags":  [
                                                         "History",
                                                         "Religion"
@@ -4977,7 +4977,7 @@
                                                      ]
                                        },
     "Medical Specialties":  {
-                                "niche":  true,
+                                "niche":  false,
                                 "tags":  [
                                              "Medicine",
                                              "Academic"
@@ -6401,7 +6401,7 @@
                                        ]
                          },
     "Diseases":  {
-                     "niche":  true,
+                     "niche":  false,
                      "tags":  [
                                   "Medicine"
                               ],
@@ -6616,7 +6616,7 @@
                                                ]
                                  },
     "Stock Market Symbols":  {
-                                 "niche":  true,
+                                 "niche":  false,
                                  "tags":  [
                                               "Economics",
                                               "Tech"
@@ -7107,7 +7107,7 @@
                                      ]
                        },
     "Programming Languages":  {
-                                  "niche":  true,
+                                  "niche":  false,
                                   "tags":  [
                                                "Tech",
                                                "Academic"
@@ -7216,7 +7216,7 @@
                                             ]
                               },
     "Wine Varieties":  {
-                           "niche":  true,
+                           "niche":  false,
                            "tags":  [
                                         "Food"
                                     ],
@@ -7612,7 +7612,7 @@
                                             ]
                               },
     "Nobel Peace Prize Winners":  {
-                                      "niche":  true,
+                                      "niche":  false,
                                       "tags":  [
                                                    "History",
                                                    "Academic"
@@ -7701,7 +7701,7 @@
                                                 ]
                                   },
     "Musical Terms":  {
-                          "niche":  true,
+                          "niche":  false,
                           "tags":  [
                                        "Music",
                                        "Academic"
