@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useCallback, Suspense, useRef } from 'react';
+import React, { useState, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Container,
@@ -20,17 +20,16 @@ import {
   DialogContent,
   DialogActions,
   Snackbar,
-  Alert,
-  Tooltip
+  Alert
 } from '@mui/material';
-import AddCircleIcon from '@mui/icons-material/AddCircle';
 import MenuIcon from '@mui/icons-material/Menu';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 
-import { Tile, UserGroup, GameAction } from '../types';
+import { Tile, GameAction } from '../types';
 import { useGameLogic } from '../hooks/useGameLogic';
 import { TileComponent } from '../components/Tile';
 import { Sidebar } from '../components/Sidebar';
+import { getRandomColor } from '../utils/colors';
 
 function GameContent() {
   const searchParams = useSearchParams();
@@ -41,16 +40,16 @@ function GameContent() {
     isPlaying,
     isHost,
     groupStats,
+    selectedTile,
+    setSelectedTile,
     handleAction,
     handleStart,
-    quitGame,
-    setIsPlaying
+    quitGame
   } = useGameLogic(roomCodeFromUrl);
 
   const [gridSizeInput, setGridSizeInput] = useState<number>(state.gridSize);
   const [sidebarExpanded, setSidebarExpanded] = useState(true);
   const [settingsExpanded, setSettingsExpanded] = useState(false);
-  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
 
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [activeTileId, setActiveTileId] = useState<string | null>(null);
@@ -78,11 +77,15 @@ function GameContent() {
       if (!prev) return tile;
       handleAction({ 
         type: 'MERGE_TILES', 
-        payload: { tile1Id: prev.id, tile2Id: tile.id, newGroupColor: '#FFB3BA' } 
+        payload: { 
+          tile1Id: prev.id, 
+          tile2Id: tile.id, 
+          newGroupColor: getRandomColor(state.userGroups.map(g => g.color))
+        } 
       });
       return null;
     });
-  }, [handleAction]);
+  }, [handleAction, setSelectedTile, state.userGroups]);
 
   const onDragStart = useCallback((e: React.DragEvent, tile: Tile) => {
     if (tile.locked) return;
@@ -92,12 +95,19 @@ function GameContent() {
   const onDrop = useCallback((e: React.DragEvent, targetTile: Tile) => {
     e.preventDefault();
     if (targetTile.locked) return;
-    const draggedTile = JSON.parse(e.dataTransfer.getData('application/json')) as Tile;
-    handleAction({ 
-      type: 'MERGE_TILES', 
-      payload: { tile1Id: targetTile.id, tile2Id: draggedTile.id, newGroupColor: '#FFB3BA' } 
-    });
-  }, [handleAction]);
+    try {
+      const draggedTile = JSON.parse(e.dataTransfer.getData('application/json')) as Tile;
+      handleAction({ 
+        type: 'MERGE_TILES', 
+        payload: { 
+          tile1Id: targetTile.id, 
+          tile2Id: draggedTile.id, 
+          newGroupColor: getRandomColor(state.userGroups.map(g => g.color))
+        } 
+      });
+      setSelectedTile(null);
+    } catch (err) { console.error(err); }
+  }, [handleAction, setSelectedTile, state.userGroups]);
 
   const renderSetup = () => (
     <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh">
@@ -115,6 +125,8 @@ function GameContent() {
       </Box>
     </Box>
   );
+
+  const activeTiles = useMemo(() => state.tiles.filter(t => !t.locked), [state.tiles]);
 
   const renderGame = () => (
     <Box display="flex" height="100vh" p={2} gap={2}>
@@ -144,7 +156,7 @@ function GameContent() {
           ))}
           <Box sx={{ flexGrow: 1, overflowX: 'auto', pb: 2 }}>
             <Box display="grid" gap={1} gridTemplateColumns={`repeat(${state.tilesPerRow}, minmax(100px, 1fr))`} sx={{ minWidth: 'min-content' }}>
-              {state.tiles.filter(t => !t.locked).map((tile) => (
+              {activeTiles.map((tile) => (
                 tile.hidden ? 
                   <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} /> :
                   <TileComponent 
@@ -179,7 +191,13 @@ function GameContent() {
         onCreateNewGroup={() => {
           const newId = Math.random().toString(36).substring(2, 9);
           const name = `Group ${state.userGroups.length + 1}`;
-          handleAction({ type: 'CREATE_GROUP', payload: { tileId: activeTileId, group: { id: newId, name, color: '#FFB3BA', lastUpdated: Date.now() } } });
+          handleAction({ 
+            type: 'CREATE_GROUP', 
+            payload: { 
+              tileId: activeTileId, 
+              group: { id: newId, name, color: getRandomColor(state.userGroups.map(g => g.color)), lastUpdated: Date.now() } 
+            } 
+          });
           setGroupToRename(newId);
           setNewGroupName(name);
           setRenameDialogOpen(true);
@@ -208,7 +226,13 @@ function GameContent() {
         <MenuItem onClick={() => {
           const newId = Math.random().toString(36).substring(2, 9);
           const name = `Group ${state.userGroups.length + 1}`;
-          handleAction({ type: 'CREATE_GROUP', payload: { tileId: activeTileId, group: { id: newId, name, color: '#FFB3BA', lastUpdated: Date.now() } } });
+          handleAction({ 
+            type: 'CREATE_GROUP', 
+            payload: { 
+              tileId: activeTileId, 
+              group: { id: newId, name, color: getRandomColor(state.userGroups.map(g => g.color)), lastUpdated: Date.now() } 
+            } 
+          });
           setGroupToRename(newId);
           setNewGroupName(name);
           setRenameDialogOpen(true);

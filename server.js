@@ -237,7 +237,9 @@ app.prepare().then(() => {
             }
 
             room.version = Date.now();
-            io.to(roomCode).emit('state_update', state);
+            // Broadcast the ACTION instead of the whole state to others
+            socket.to(roomCode).emit('remote_action', action);
+            // We can still occasionally emit full state if needed, but for now actions are faster
         }
     });
   });

@@ -7,7 +7,8 @@ import { GameState, GameAction } from '../types';
 export function useSocket(
   roomCode: string | null, 
   onStateUpdate: (state: GameState) => void,
-  getLatestState?: () => GameState | null
+  getLatestState?: () => GameState | null,
+  onRemoteAction?: (action: GameAction) => void
 ) {
   const socketRef = useRef<any>(null);
   const [isHost, setIsHost] = useState(false);
@@ -44,6 +45,10 @@ export function useSocket(
       onStateUpdate(newState);
     });
 
+    socket.on('remote_action', (action: GameAction) => {
+      if (onRemoteAction) onRemoteAction(action);
+    });
+
     socket.on('request_state', () => {
       const state = getLatestStateRef.current ? getLatestStateRef.current() : null;
       if (state && state.tiles && state.tiles.length > 0) {
@@ -55,7 +60,7 @@ export function useSocket(
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [roomCode, onStateUpdate]);
+  }, [roomCode, onStateUpdate, onRemoteAction]);
 
   const dispatchAction = useCallback((action: GameAction) => {
     if (socketRef.current && roomCode) {
