@@ -23,6 +23,7 @@ import TimerIcon from '@mui/icons-material/Timer';
 import PeopleIcon from '@mui/icons-material/People';
 import { UserGroup, PlayerStats } from '../types';
 import { RenameDialog } from './RenameDialog';
+import { getGroupDisplayName } from '../utils/groupUtils';
 
 interface SidebarProps {
   score: number;
@@ -239,7 +240,7 @@ export const Sidebar = React.memo(({
                 sx={{ p: 1, mb: 1, backgroundColor: group.color, display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'default' }}
               >
                 <Box>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{group.name}</Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>{getGroupDisplayName(group.name, groupItems)}</Typography>
                   <Typography variant="caption">{group.count} / {gridSize} items</Typography>
                 </Box>
                 <Button size="small" onClick={() => onOpenRenameDialog(group.id, group.name)}>Rename</Button>

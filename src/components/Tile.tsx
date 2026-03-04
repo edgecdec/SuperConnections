@@ -2,6 +2,7 @@ import React from 'react';
 import { Paper, Typography, IconButton, Tooltip } from '@mui/material';
 import LabelIcon from '@mui/icons-material/Label';
 import { Tile, UserGroup } from '../types';
+import { getGroupDisplayName } from '../utils/groupUtils';
 
 interface TileProps {
   tile: Tile;
@@ -34,10 +35,13 @@ export const TileComponent = React.memo(({
   console.log(`[${new Date().toLocaleTimeString()}] [RENDER] Tile ${tile.id}`);
   
   let displayText = tile.text;
-  if (tile.itemCount > 2) {
-     const firstItem = tile.text.split(',')[0];
-     const groupName = group?.name || 'Group';
-     displayText = `${groupName}: ${firstItem}...`;
+  if (tile.itemCount > 1) {
+    if (group) {
+      displayText = getGroupDisplayName(group.name, tooltipText);
+    } else {
+      const items = tile.text.split(', ').map(s => s.trim());
+      displayText = items.length <= 2 ? items.join(', ') : `${items.slice(0, 2).join(', ')}...`;
+    }
   }
 
   return (

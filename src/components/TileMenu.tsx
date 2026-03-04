@@ -19,6 +19,7 @@ import AddCircleIcon from '@mui/icons-material/AddCircle';
 import HistoryIcon from '@mui/icons-material/History';
 import GroupIcon from '@mui/icons-material/Group';
 import { UserGroup, Tile } from '../types';
+import { getGroupDisplayName } from '../utils/groupUtils';
 
 interface TileMenuProps {
   open: boolean;
@@ -45,7 +46,7 @@ export const TileMenu = ({
 
   const activeTile = tiles.find(t => t.id === activeTileId);
   
-  // Calculate group counts
+  // Calculate group counts and items
   const groupCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     tiles.forEach(t => {
@@ -56,6 +57,17 @@ export const TileMenu = ({
     return counts;
   }, [tiles]);
 
+  const groupItemMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    tiles.forEach(t => {
+      if (t.userGroupId && !t.hidden) {
+        if (!map[t.userGroupId]) map[t.userGroupId] = t.text;
+        else map[t.userGroupId] += ', ' + t.text;
+      }
+    });
+    return map;
+  }, [tiles]);
+
   // Sort groups: Local Touch First -> Search Filter -> Global Recency
   const sortedGroups = useMemo(() => {
     const localSet = new Set(localTouchedGroupIds);
@@ -63,7 +75,8 @@ export const TileMenu = ({
     return [...userGroups]
       .filter(g => {
         if (!search) return groupCounts[g.id] > 0;
-        return g.name.toLowerCase().includes(search.toLowerCase()) && groupCounts[g.id] > 0;
+        const displayName = getGroupDisplayName(g.name, groupItemMap[g.id] || '');
+        return displayName.toLowerCase().includes(search.toLowerCase()) && groupCounts[g.id] > 0;
       })
       .sort((a, b) => {
         const aLocalIdx = localTouchedGroupIds.indexOf(a.id);
@@ -75,7 +88,7 @@ export const TileMenu = ({
 
         return b.lastUpdated - a.lastUpdated;
       });
-  }, [userGroups, search, localTouchedGroupIds, groupCounts]);
+  }, [userGroups, search, localTouchedGroupIds, groupCounts, groupItemMap]);
 
   const canRemoveGroup = activeTile && activeTile.userGroupId && (groupCounts[activeTile.userGroupId] || 0) === 1 && activeTile.itemCount === 1;
 
@@ -99,7 +112,7 @@ export const TileMenu = ({
           <ListItem disablePadding>
             <ListItemButton onClick={() => { if (activeTileId) onCreateGroup(activeTileId); onClose(); }}>
               <ListItemIcon><AddCircleIcon color="primary" /></ListItemIcon>
-              <ListItemText primary="Create New Group" secondary="Start a fresh group for this item" />
+              <ListItemText primary="Create New Group" primaryTypographyProps={{ variant: 'body2' }} />
             </ListItemButton>
           </ListItem>
           
@@ -108,7 +121,7 @@ export const TileMenu = ({
               disabled={!canRemoveGroup}
               onClick={() => { if (activeTileId) onTagTile(activeTileId, null); onClose(); }}
             >
-              <ListItemText inset primary="Remove from Group" />
+              <ListItemText inset primary="Remove from Group" primaryTypographyProps={{ variant: 'body2' }} />
             </ListItemButton>
           </ListItem>
 
@@ -118,30 +131,33 @@ export const TileMenu = ({
             {search ? 'Search Results' : 'Available Groups'}
           </Typography>
 
-          {sortedGroups.map(group => (
-            <ListItem key={group.id} disablePadding>
-              <ListItemButton onClick={() => { if (activeTileId) onTagTile(activeTileId, group.id); onClose(); }}>
-                <ListItemIcon>
-                  <Box sx={{ 
-                    width: 24, 
-                    height: 24, 
-                    borderRadius: '50%', 
-                    backgroundColor: group.color, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    border: '1px solid #000'
-                  }}>
-                    {localTouchedGroupIds.includes(group.id) ? <HistoryIcon sx={{ fontSize: 14, color: 'rgba(0,0,0,0.5)' }} /> : <GroupIcon sx={{ fontSize: 14, color: 'rgba(0,0,0,0.5)' }} />}
-                  </Box>
-                </ListItemIcon>
-                <ListItemText 
-                  primary={group.name} 
-                  secondary={`${groupCounts[group.id] || 0} items`} 
-                />
-              </ListItemButton>
-            </ListItem>
-          ))}
+          {sortedGroups.map(group => {
+            const displayName = getGroupDisplayName(group.name, groupItemMap[group.id] || '');
+            return (
+              <ListItem key={group.id} disablePadding>
+                <ListItemButton onClick={() => { if (activeTileId) onTagTile(activeTileId, group.id); onClose(); }}>
+                  <ListItemIcon>
+                    <Box sx={{ 
+                      width: 20, 
+                      height: 20, 
+                      borderRadius: '50%', 
+                      backgroundColor: group.color, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      border: '1px solid #000'
+                    }}>
+                      {localTouchedGroupIds.includes(group.id) ? <HistoryIcon sx={{ fontSize: 12, color: 'rgba(0,0,0,0.5)' }} /> : <GroupIcon sx={{ fontSize: 12, color: 'rgba(0,0,0,0.5)' }} />}
+                    </Box>
+                  </ListItemIcon>
+                  <ListItemText 
+                    primary={`${displayName} (${groupCounts[group.id] || 0})`} 
+                    primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
+                  />
+                </ListItemButton>
+              </ListItem>
+            );
+          })}
           
           {sortedGroups.length === 0 && (
             <ListItem sx={{ py: 4, justifyContent: 'center' }}>
