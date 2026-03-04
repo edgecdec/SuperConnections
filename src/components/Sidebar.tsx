@@ -16,7 +16,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
-import { UserGroup, Tile } from '../types';
+import { UserGroup } from '../types';
 
 interface SidebarProps {
   score: number;
@@ -36,10 +36,10 @@ interface SidebarProps {
   onQuitGame: () => void;
   onCreateNewGroup: () => void;
   onOpenRenameDialog: (groupId: string, name: string) => void;
-  tiles: Tile[];
+  groupItemMap: Record<string, string>;
 }
 
-export const Sidebar = ({
+export const Sidebar = React.memo(({
   score,
   gridSize,
   mistakes,
@@ -57,7 +57,7 @@ export const Sidebar = ({
   onQuitGame,
   onCreateNewGroup,
   onOpenRenameDialog,
-  tiles
+  groupItemMap
 }: SidebarProps) => {
   if (!sidebarExpanded) return null;
 
@@ -144,10 +144,7 @@ export const Sidebar = ({
 
       <Box flex={1} sx={{ overflowY: 'auto' }}>
         {groupStats.map((group) => {
-          const groupItems = tiles
-            .filter(t => t.userGroupId === group.id && !t.hidden)
-            .map(t => t.text)
-            .join(', ');
+          const groupItems = groupItemMap[group.id] || '';
 
           return (
             <Tooltip key={group.id} title={groupItems} arrow placement="left" disableInteractive>
@@ -169,5 +166,6 @@ export const Sidebar = ({
       </Box>
     </Paper>
   );
-};
+});
 
+Sidebar.displayName = 'Sidebar';

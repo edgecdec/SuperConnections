@@ -19,10 +19,11 @@ interface GameGridProps {
   onCopyRoomLink: () => void;
   onMenuOpen: (e: React.MouseEvent<HTMLButtonElement>, id: string) => void;
   onTileClick: (tile: Tile) => void;
+  onDragStart: (e: React.DragEvent, tile: Tile) => void;
   onDrop: (e: React.DragEvent, targetTile: Tile) => void;
 }
 
-export const GameGrid = ({
+export const GameGrid = React.memo(({
   roomCode,
   tiles,
   gridSize,
@@ -37,8 +38,20 @@ export const GameGrid = ({
   onCopyRoomLink,
   onMenuOpen,
   onTileClick,
+  onDragStart,
   onDrop
 }: GameGridProps) => {
+  const renderStartTime = performance.now();
+  
+  React.useEffect(() => {
+    const renderEndTime = performance.now();
+    console.log(`[PERF] GameGrid render committed in ${(renderEndTime - renderStartTime).toFixed(2)}ms`);
+  });
+
+  const handleDragOver = React.useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
   if (roomCode && tiles.length === 0) {
     return (
       <Box flex={3} display="flex" alignItems="center" justifyContent="center">
@@ -85,8 +98,8 @@ export const GameGrid = ({
                 isError={isError}
                 onMenuOpen={onMenuOpen} 
                 onTileClick={onTileClick} 
-                onDragStart={e => { if (tile.locked) return; e.dataTransfer.setData('application/json', JSON.stringify(tile)); }} 
-                onDragOver={e => e.preventDefault()} 
+                onDragStart={onDragStart} 
+                onDragOver={handleDragOver} 
                 onDrop={onDrop} 
                 tooltipText={tooltipText}
               />;
@@ -95,4 +108,6 @@ export const GameGrid = ({
       </Box>
     </Box>
   );
-};
+});
+
+GameGrid.displayName = 'GameGrid';

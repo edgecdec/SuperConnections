@@ -30,6 +30,7 @@ export const TileComponent = React.memo(({
   onDrop,
   tooltipText
 }: TileProps) => {
+  console.log(`[RENDER] Tile ${tile.id} (${tile.text.substring(0, 10)})`);
   let displayText = tile.text;
   if (tile.itemCount > 2) {
      const firstItem = tile.text.split(',')[0];
@@ -86,6 +87,19 @@ export const TileComponent = React.memo(({
       </Paper>
     </Tooltip>
   );
+}, (prev, next) => {
+  // Deep comparison for memoization
+  return prev.isSelected === next.isSelected &&
+         prev.isError === next.isError &&
+         prev.tile.text === next.tile.text &&
+         prev.tile.userGroupId === next.tile.userGroupId &&
+         prev.tile.itemCount === next.tile.itemCount &&
+         prev.tile.locked === next.tile.locked &&
+         prev.tile.hidden === next.tile.hidden &&
+         prev.group?.color === next.group?.color &&
+         prev.group?.name === next.group?.name &&
+         prev.tooltipText === next.tooltipText &&
+         prev.gridSize === next.gridSize;
 });
 
 TileComponent.displayName = 'TileComponent';

@@ -23,6 +23,11 @@ export const TileMenu = ({
   onTagTile
 }: TileMenuProps) => {
   const activeTile = tiles.find(t => t.id === activeTileId);
+  const groupCount = activeTile?.userGroupId 
+    ? tiles.reduce((acc, t) => (t.userGroupId === activeTile.userGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0)
+    : 0;
+
+  const canRemoveGroup = activeTile && activeTile.userGroupId && groupCount === 1 && activeTile.itemCount === 1;
 
   return (
     <Menu anchorEl={anchorEl} open={Boolean(anchorEl)} onClose={onClose}>
@@ -31,7 +36,10 @@ export const TileMenu = ({
         <ListItemText>Create New Group</ListItemText>
       </MenuItem>
       <Divider />
-      <MenuItem onClick={() => { if (activeTileId) onTagTile(activeTileId, null); onClose(); }}>
+      <MenuItem 
+        disabled={!canRemoveGroup}
+        onClick={() => { if (activeTileId) onTagTile(activeTileId, null); onClose(); }}
+      >
         <ListItemText>Remove Group</ListItemText>
       </MenuItem>
       {userGroups.slice().sort((a, b) => b.lastUpdated - a.lastUpdated).map(group => {

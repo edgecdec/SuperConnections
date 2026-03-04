@@ -183,8 +183,18 @@ app.prepare().then(() => {
                 const { tileId, groupId, newGroupId } = action.payload;
                 const tile = state.tiles.find(t => t.id === tileId);
                 if (tile) {
-                    if (groupId === null) { tile.userGroupId = null; stateChanged = true; actionResult = { success: true, actionType: action.type }; }
-                    else {
+                    if (groupId === null) {
+                        const currentGroupId = tile.userGroupId;
+                        const groupCount = currentGroupId ? state.tiles.reduce((acc, t) => (t.userGroupId === currentGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0) : 0;
+                        
+                        if (tile.itemCount === 1 && groupCount === 1) {
+                            tile.userGroupId = null;
+                            stateChanged = true;
+                            actionResult = { success: true, actionType: action.type };
+                        } else {
+                            actionResult = { success: false, actionType: action.type, message: 'Cannot remove group with multiple items' };
+                        }
+                    } else {
                         const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
                         if (primary) {
                             const success = performMerge(state, primary.id, tileId, '#fff', newGroupId);
