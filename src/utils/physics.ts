@@ -6,7 +6,8 @@
 
 export function applyGridPhysics(tiles: any[], settings: any, numCols: number, survivorId: string | null = null) {
   if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
-    return tiles;
+    // Even if physics is off, we ensure order keys are consistent with array indices
+    return tiles.map((t, i) => ({ ...t, order: i }));
   }
 
   const columns = numCols || 25;
@@ -26,11 +27,9 @@ export function applyGridPhysics(tiles: any[], settings: any, numCols: number, s
   colBuckets.forEach(bucket => {
     if (bucket.length === 0) return;
 
-    // DETERMINISTIC SORT: Within each column, tiles are ordered by their 'order' key.
-    // This prevents items from jumping around due to main array reordering.
+    // DETERMINISTIC SORT: Within each column, tiles are ordered by their CURRENT 'order' key.
     const sortedBucket = [...bucket].sort((a, b) => (a.order || 0) - (b.order || 0));
 
-    // Filter into pools while maintaining the internal 'order'
     const active = sortedBucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
     const hiddenOrLocked = sortedBucket.filter(t => t.hidden || t.locked);
     const survivor = sortedBucket.find(t => t.id === survivorId);
@@ -51,7 +50,7 @@ export function applyGridPhysics(tiles: any[], settings: any, numCols: number, s
     }
   });
 
-  // 3. Re-flatten row-by-row (Deterministic Flattening)
+  // 3. Re-flatten row-by-row
   const flattened: any[] = [];
   const maxRows = Math.max(...colBuckets.map(b => b.length));
 
@@ -62,5 +61,12 @@ export function applyGridPhysics(tiles: any[], settings: any, numCols: number, s
     }
   }
 
-  return flattened;
+  // 4. PERSIST THE LAYOUT: 
+  // Update every tile's 'order' key to its new position in the flattened array.
+  // This ensures that the next time the engine runs (mistake/refresh), 
+  // the 'sortedBucket' pass above will see this new arrangement as the 'Truth'.
+  return flattened.map((tile, idx) => ({
+    ...tile,
+    order: idx
+  }));
 }

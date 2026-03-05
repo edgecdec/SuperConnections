@@ -24,7 +24,9 @@ const parseCookie = (str, name) => {
 
 // SHARED PHYSICS ENGINE (Mirror of src/utils/physics.ts)
 function applyGridPhysics(tiles, settings, numCols, survivorId = null) {
-  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) return tiles;
+  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
+    return tiles.map((t, i) => ({ ...t, order: i }));
+  }
   const columns = numCols || 25;
   const colBuckets = Array.from({ length: columns }, () => []);
   tiles.forEach(tile => {
@@ -34,14 +36,10 @@ function applyGridPhysics(tiles, settings, numCols, survivorId = null) {
   });
   colBuckets.forEach(bucket => {
     if (bucket.length === 0) return;
-    
-    // DETERMINISTIC SORT: Within each column, tiles are ordered by their 'order' key.
     const sortedBucket = [...bucket].sort((a, b) => (a.order || 0) - (b.order || 0));
-    
     const active = sortedBucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
     const hiddenOrLocked = sortedBucket.filter(t => t.hidden || t.locked);
     const survivor = sortedBucket.find(t => t.id === survivorId);
-    
     bucket.length = 0;
     if (survivor && settings.popToTop) bucket.push(survivor);
     else if (survivor) active.unshift(survivor);
@@ -55,7 +53,8 @@ function applyGridPhysics(tiles, settings, numCols, survivorId = null) {
       if (tile) flattened.push(tile);
     }
   }
-  return flattened;
+  // PERSIST NEW ORDER
+  return flattened.map((t, i) => ({ ...t, order: i }));
 }
 
 const shuffleArray = (array) => {
@@ -123,7 +122,7 @@ app.prepare().then(() => {
        if (!rooms[roomCode]) {
            rooms[roomCode] = {
                hostId: userId,
-               state: initialGameState || { tiles: [], userGroups: [], completedCategories: [], mistakes: 0, score: 0, playerStats: {}, settings: { numCategories: 4, itemsPerCategory: 4, gravity: 'up', popToTop: true } },
+               state: initialGameState || null,
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
@@ -177,7 +176,7 @@ app.prepare().then(() => {
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            survivor.text = Array.from(new Set([...survivor.text.split(', ').map(s => s.trim()), ...merged.text.split(', ').map(s => s.trim())])).join(', ');
+            survivor.text = Array.from(new Set([...survivor.text.split(', '), ...merged.text.split(', ')])).join(', ');
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
 
@@ -284,8 +283,7 @@ app.prepare().then(() => {
                 const locked = state.tiles.filter(t => t.locked);
                 const refilledTiles = [...unlocked, ...locked];
                 const tpr = state.tilesPerRow;
-                state.tiles = refilledTiles.map((t, i) => ({ ...t, col: i % tpr }));
-                state.tiles = applyGridPhysics(state.tiles, state.settings, tpr);
+                state.tiles = applyGridPhysics(refilledTiles.map((t, i) => ({ ...t, col: i % tpr })), state.settings, tpr);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
@@ -295,8 +293,7 @@ app.prepare().then(() => {
                 const locked = state.tiles.filter(t => t.locked);
                 const shuffledUnlocked = shuffleArray(unlocked);
                 const tpr = state.tilesPerRow;
-                state.tiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr, order: i }));
-                state.tiles = applyGridPhysics(state.tiles, state.settings, tpr);
+                state.tiles = applyGridPhysics(shuffledUnlocked.concat(locked).map((t, i) => ({ ...t, col: i % tpr, order: i })), state.settings, tpr);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
@@ -304,8 +301,7 @@ app.prepare().then(() => {
             case 'UPDATE_SETTINGS': {
                 if (action.payload.tilesPerRow !== undefined) {
                     state.tilesPerRow = action.payload.tilesPerRow;
-                    state.tiles = state.tiles.map((t, i) => ({ ...t, col: i % action.payload.tilesPerRow }));
-                    state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
+                    state.tiles = applyGridPhysics(state.tiles.map((t, i) => ({ ...t, col: i % action.payload.tilesPerRow })), state.settings, state.tilesPerRow);
                 }
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
                 stateChanged = true;
