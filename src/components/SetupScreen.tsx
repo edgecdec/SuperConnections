@@ -108,7 +108,7 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
   };
 
   return (
-    <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh" p={4} sx={{ maxWidth: 800, mx: 'auto' }}>
+    <Box suppressHydrationWarning display="flex" flexDirection="column" alignItems="center" justifyContent="center" minHeight="100vh" p={4} sx={{ maxWidth: 800, mx: 'auto' }}>
       <Typography variant="h2" gutterBottom fontWeight="bold" color="primary">Super Connections</Typography>
       
       <Paper elevation={3} sx={{ p: 4, width: '100%', borderRadius: 4 }}>

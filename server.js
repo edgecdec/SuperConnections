@@ -76,26 +76,25 @@ app.prepare().then(() => {
        socket.join(roomCode);
 
        if (!rooms[roomCode]) {
+           // Create room with a basic placeholder state if no initial state provided
+           // This ensures the room isn't blocked for the START_GAME action
            rooms[roomCode] = {
                hostId: userId,
-               state: initialGameState || null,
+               state: initialGameState || { tiles: [], userGroups: [], completedCategories: [], mistakes: 0, score: 0, playerStats: {}, settings: { numCategories: 4, itemsPerCategory: 4 } },
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
-           if (rooms[roomCode].state) {
-               rooms[roomCode].state.startTime = rooms[roomCode].state.startTime || Date.now();
-               rooms[roomCode].state.playerStats = rooms[roomCode].state.playerStats || {};
-           }
            console.log(`Room ${roomCode} created by host ${userId}`);
        } else if (rooms[roomCode].cleanupTimer) {
            clearTimeout(rooms[roomCode].cleanupTimer);
            rooms[roomCode].cleanupTimer = null;
        }
 
-       if (rooms[roomCode].state) {
-           if (!rooms[roomCode].state.playerStats) rooms[roomCode].state.playerStats = {};
-           if (!rooms[roomCode].state.playerStats[userId]) {
-               rooms[roomCode].state.playerStats[userId] = {
+       const room = rooms[roomCode];
+       if (room.state) {
+           if (!room.state.playerStats) room.state.playerStats = {};
+           if (!room.state.playerStats[userId]) {
+               room.state.playerStats[userId] = {
                    name: `Player ${userId.substring(0, 4)}`,
                    score: 0,
                    mistakes: 0,
@@ -105,12 +104,12 @@ app.prepare().then(() => {
        }
 
        socket.emit('init_session', { 
-           isHost: rooms[roomCode].hostId === userId,
+           isHost: room.hostId === userId,
            userId: userId
        });
 
-       if (rooms[roomCode].state) {
-           socket.emit('state_update', rooms[roomCode].state);
+       if (room.state && room.state.tiles && room.state.tiles.length > 0) {
+           socket.emit('state_update', room.state);
        }
     });
 
@@ -163,8 +162,6 @@ app.prepare().then(() => {
             // Feature: Pop to Top (of column) & True Column Gravity
             if (state.settings && state.settings.popToTop) {
                 const columns = state.tilesPerRow || 25;
-                
-                // Reconstruct columns
                 const gridColumns = Array.from({ length: columns }, () => []);
                 let originalSurvivorColIdx = -1;
 
@@ -174,35 +171,30 @@ app.prepare().then(() => {
                    gridColumns[colIdx].push(tile);
                 });
 
-                // For the column where the survivor is, move it to the front
                 if (originalSurvivorColIdx !== -1) {
                     const col = gridColumns[originalSurvivorColIdx];
                     const sIdx = col.findIndex(t => t.id === survivorId);
                     if (sIdx !== -1) {
                         const sTile = col[sIdx];
                         col.splice(sIdx, 1);
-                        col.unshift(sTile); // Pop to top of this specific column
+                        col.unshift(sTile);
                     }
                 }
 
-                // Apply true visual gravity: Push hidden (merged/locked) tiles to the absolute bottom of their columns
                 if (state.settings.gravity === 'up') {
                    gridColumns.forEach(col => {
                        const active = col.filter(t => !t.hidden && !t.locked);
                        const hidden = col.filter(t => t.hidden || t.locked);
                        col.length = 0;
-                       col.push(...active, ...hidden); // Active fall up, hidden sink down
+                       col.push(...active, ...hidden);
                    });
                 }
 
-                // Re-flatten the grid left-to-right, top-to-bottom
                 const flattenedTiles = [];
                 const numRows = Math.ceil(state.tiles.length / columns);
                 for (let row = 0; row < numRows; row++) {
                     for (let col = 0; col < columns; col++) {
-                        if (gridColumns[col][row]) {
-                            flattenedTiles.push(gridColumns[col][row]);
-                        }
+                        if (gridColumns[col][row]) flattenedTiles.push(gridColumns[col][row]);
                     }
                 }
                 state.tiles = flattenedTiles;
@@ -285,12 +277,7 @@ app.prepare().then(() => {
                         const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
                         if (primary) {
                             const success = performMerge(state, primary.id, tileId, '#fff', newGroupId);
-                            actionResult = { 
-                                success, 
-                                actionType: action.type, 
-                                message: success ? 'Tagged!' : 'Incorrect match!',
-                                involvedTileIds: [primary.id, tileId]
-                            };
+                            actionResult = { success, actionType: action.type, message: success ? 'Tagged!' : 'Incorrect match!', involvedTileIds: [primary.id, tileId] };
                             stateChanged = true;
                         } else { 
                             tile.userGroupId = groupId; stateChanged = true; 
@@ -335,19 +322,16 @@ app.prepare().then(() => {
 
         socket.emit('action_result', actionResult);
 
-        // ALWAYS Update contributor stats and broadcast state if an action was attempted
-        // This prevents the 'bounce back' effect on mistakes by keeping all clients in sync with the current board order
+        // Always update active timestamp
         if (state.playerStats && state.playerStats[userId]) {
             state.playerStats[userId].lastActive = Date.now();
             if (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId)) {
-                if (actionResult.success) {
-                    state.playerStats[userId].score += 1;
-                } else {
-                    state.playerStats[userId].mistakes += 1;
-                }
+                if (actionResult.success) state.playerStats[userId].score += 1;
+                else state.playerStats[userId].mistakes += 1;
             }
         }
 
+        // Handle auto-completion of categories
         const groupCounts = state.tiles.reduce((acc, tile) => {
             if (tile.userGroupId && !tile.locked && !tile.hidden) acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
             return acc;
@@ -365,9 +349,11 @@ app.prepare().then(() => {
             }
         });
 
+        // DEFINITIVE STATE SYNC: Always broadcast to keep all clients in exact same layout
         room.version = Date.now();
-        // Broadcast the final state to everyone, ensuring consistent tile order
         io.to(roomCode).emit('state_update', state);
+        
+        // Only propagate action if it was successful and changed state
         if (stateChanged && actionResult.success) {
             socket.to(roomCode).emit('remote_action', action);
         }
