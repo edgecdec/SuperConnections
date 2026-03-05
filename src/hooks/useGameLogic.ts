@@ -178,7 +178,8 @@ export function useGameLogic(initialRoomCode: string | null) {
       case 'REFILL_BOARD': {
         const unlocked = prevState.tiles.filter(t => !t.locked && !t.hidden);
         const locked = prevState.tiles.filter(t => t.locked);
-        const refilledTiles = [...unlocked, ...locked];
+        // Shuffle unlocked items so they get new random positions on refill
+        const refilledTiles = [...shuffleArray(unlocked), ...locked];
         const tpr = prevState.tilesPerRow;
         result.next = { 
           ...prevState, 
