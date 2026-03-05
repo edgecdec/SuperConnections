@@ -10,19 +10,15 @@ import {
   Slider,
   FormControlLabel,
   Switch,
-  Tooltip,
-  List,
-  ListItem,
-  ListItemText
+  Tooltip
 } from '@mui/material';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import TimerIcon from '@mui/icons-material/Timer';
-import PeopleIcon from '@mui/icons-material/People';
-import { UserGroup, PlayerStats, GameSettings } from '../types';
-import { RenameDialog } from './RenameDialog';
+import { UserGroup, PlayerStats as PlayerStatsType, GameSettings } from '../types';
+import { PlayerStats } from './PlayerStats';
 import { getGroupDisplayName } from '../utils/groupUtils';
 
 interface SidebarProps {
@@ -47,7 +43,7 @@ interface SidebarProps {
   groupItemMap: Record<string, string>;
   onDropOnGroup: (e: React.DragEvent, groupId: string) => void;
   elapsedTime: number;
-  playerStats: Record<string, PlayerStats>;
+  playerStats: Record<string, PlayerStatsType>;
   onSetPlayerName: (name: string) => void;
   settings: GameSettings;
 }
@@ -86,10 +82,6 @@ export const Sidebar = React.memo(({
   onSetPlayerName,
   settings
 }: SidebarProps) => {
-  const [statsExpanded, setStatsExpanded] = useState(false);
-  const [nameDialogOpen, setNameDialogOpen] = useState(false);
-  const [tempName, setTempName] = useState('');
-
   if (!sidebarExpanded) return null;
 
   const totalPossibleMerges = settings.numCategories * (settings.itemsPerCategory - 1);
@@ -124,48 +116,7 @@ export const Sidebar = React.memo(({
     
       <Divider sx={{ my: 2 }} />
 
-      {/* NEW: Detailed Player Stats Section */}
-      <Box mb={1}>
-        <Box 
-          display="flex" 
-          justifyContent="space-between" 
-          alignItems="center" 
-          sx={{ cursor: 'pointer' }}
-          onClick={() => setStatsExpanded(!statsExpanded)}
-        >
-          <Box display="flex" alignItems="center" gap={1}>
-            <PeopleIcon fontSize="small" />
-            <Typography variant="h6">Player Stats</Typography>
-          </Box>
-          {statsExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-        </Box>
-        <Collapse in={statsExpanded}>
-          <Box sx={{ pt: 1, textAlign: 'center' }}>
-            <Button size="small" variant="outlined" onClick={() => setNameDialogOpen(true)} sx={{ mb: 1 }}>Set My Name</Button>
-          </Box>
-          <List dense>
-            {Object.entries(playerStats).map(([id, stats]) => (
-              <ListItem key={id} divider sx={{ px: 1 }}>
-                <ListItemText 
-                  primary={stats.name}
-                  secondary={`Score: ${stats.score} | Mistakes: ${stats.mistakes}`}
-                  primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </Collapse>
-      </Box>
-
-      {/* Name Change Dialog */}
-      <RenameDialog 
-        open={nameDialogOpen} 
-        onClose={() => setNameDialogOpen(false)} 
-        initialValue="" 
-        onSave={(name) => { onSetPlayerName(name); setNameDialogOpen(false); }}
-        title="Set Player Name"
-        label="Your Display Name"
-      />
+      <PlayerStats playerStats={playerStats} onSetPlayerName={onSetPlayerName} />
 
       <Divider sx={{ my: 2 }} />
 
