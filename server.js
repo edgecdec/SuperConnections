@@ -22,50 +22,45 @@ const parseCookie = (str, name) => {
     return match ? match[2] : null;
 };
 
-// SHARED PHYSICS LOGIC (Mirror of src/utils/physics.ts)
-function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
-  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
-    return tiles;
-  }
-
-  const numCols = tilesPerRow;
-  const colBuckets = Array.from({ length: numCols }, () => []);
-
+// SHARED PHYSICS ENGINE (Mirror of src/utils/physics.ts)
+function applyGridPhysics(tiles, settings, numCols, survivorId = null) {
+  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) return tiles;
+  const columns = numCols || 25;
+  const colBuckets = Array.from({ length: columns }, () => []);
   tiles.forEach(tile => {
     const col = (tile.col !== undefined) ? tile.col : 0;
     if (colBuckets[col]) colBuckets[col].push(tile);
+    else colBuckets[0].push(tile);
   });
-
   colBuckets.forEach(bucket => {
     if (bucket.length === 0) return;
     const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
     const hiddenOrLocked = bucket.filter(t => t.hidden || t.locked);
     const survivor = bucket.find(t => t.id === survivorId);
-
     bucket.length = 0;
-    if (survivor && settings.popToTop) {
-      bucket.push(survivor);
-    } else if (survivor) {
-      active.unshift(survivor);
-    }
-
-    if (settings.gravity === 'up') {
-      bucket.push(...active, ...hiddenOrLocked);
-    } else {
-      bucket.push(...active, ...hiddenOrLocked);
-    }
+    if (survivor && settings.popToTop) bucket.push(survivor);
+    else if (survivor) active.unshift(survivor);
+    bucket.push(...active, ...hiddenOrLocked);
   });
-
   const flattened = [];
   const maxRows = Math.max(...colBuckets.map(b => b.length));
   for (let r = 0; r < maxRows; r++) {
-    for (let c = 0; c < numCols; c++) {
+    for (let c = 0; c < columns; c++) {
       const tile = colBuckets[c][r];
       if (tile) flattened.push(tile);
     }
   }
   return flattened;
 }
+
+const shuffleArray = (array) => {
+  const next = [...array];
+  for (let i = next.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+};
 
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
@@ -123,14 +118,10 @@ app.prepare().then(() => {
        if (!rooms[roomCode]) {
            rooms[roomCode] = {
                hostId: userId,
-               state: initialGameState || null,
+               state: initialGameState || { tiles: [], userGroups: [], completedCategories: [], mistakes: 0, score: 0, playerStats: {}, settings: { numCategories: 4, itemsPerCategory: 4, gravity: 'up', popToTop: true } },
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
-           if (rooms[roomCode].state) {
-               rooms[roomCode].state.startTime = rooms[roomCode].state.startTime || Date.now();
-               rooms[roomCode].state.playerStats = rooms[roomCode].state.playerStats || {};
-           }
            console.log(`Room ${roomCode} created by host ${userId}`);
        } else if (rooms[roomCode].cleanupTimer) {
            clearTimeout(rooms[roomCode].cleanupTimer);
@@ -155,6 +146,7 @@ app.prepare().then(() => {
            userId: userId
        });
 
+       // SERVER IS SOURCE OF TRUTH: If room has tiles, send them to the joiner
        if (room.state && room.state.tiles && room.state.tiles.length > 0) {
            socket.emit('state_update', room.state);
        }
@@ -181,7 +173,7 @@ app.prepare().then(() => {
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            survivor.text = Array.from(new Set([...survivor.text.split(', ').map(s => s.trim()), ...merged.text.split(', ').map(s => s.trim())])).join(', ');
+            survivor.text = Array.from(new Set([...survivor.text.split(', '), ...merged.text.split(', ')])).join(', ');
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
 
@@ -200,6 +192,8 @@ app.prepare().then(() => {
             return true;
         } else {
             state.mistakes += 1;
+            // Mistake physics pass to ensure definitive sync
+            state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
             return false;
         }
     };
@@ -285,9 +279,11 @@ app.prepare().then(() => {
             case 'REFILL_BOARD': {
                 const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
                 const locked = state.tiles.filter(t => t.locked);
-                const refilledTiles = [...unlocked, ...locked];
+                // SYNCED SHUFFLE
+                const shuffledUnlocked = shuffleArray(unlocked);
                 const tpr = state.tilesPerRow;
-                state.tiles = refilledTiles.map((t, i) => ({ ...t, col: i % tpr }));
+                state.tiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr }));
+                state.tiles = applyGridPhysics(state.tiles, state.settings, tpr);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
@@ -296,6 +292,7 @@ app.prepare().then(() => {
                 if (action.payload.tilesPerRow !== undefined) {
                     state.tilesPerRow = action.payload.tilesPerRow;
                     state.tiles = state.tiles.map((t, i) => ({ ...t, col: i % action.payload.tilesPerRow }));
+                    state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
                 }
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
                 stateChanged = true;
@@ -317,11 +314,9 @@ app.prepare().then(() => {
                     if (direction === 'top') {
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow, tileId);
                     } else {
-                        // Sink to bottom: Temporarily mark as hidden to force physics to push it down
-                        const wasHidden = tile.hidden;
                         tile.hidden = true;
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
-                        tile.hidden = wasHidden;
+                        tile.hidden = false;
                     }
                     stateChanged = true;
                     actionResult = { success: true, actionType: action.type };
@@ -340,7 +335,6 @@ app.prepare().then(() => {
             }
         }
 
-        // Handle auto-completion
         const groupCounts = state.tiles.reduce((acc, tile) => {
             if (tile.userGroupId && !tile.locked && !tile.hidden) acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
             return acc;
@@ -358,7 +352,6 @@ app.prepare().then(() => {
             }
         });
 
-        // Always broadcast state to keep definitive tile order in sync
         room.version = Date.now();
         io.to(roomCode).emit('state_update', state);
         if (stateChanged && actionResult.success) {
