@@ -26,7 +26,7 @@ export const RenameDialog = ({
   }, [open, initialValue]);
 
   return (
-    <Dialog open={open} onClose={onClose}>
+    <Dialog open={open} onClose={onClose} disableScrollLock>
       <DialogTitle>{title}</DialogTitle>
       <DialogContent>
         <TextField 

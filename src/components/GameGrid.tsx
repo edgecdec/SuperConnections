@@ -43,6 +43,21 @@ export const GameGrid = React.memo(({
   onDragStart,
   onDrop
 }: GameGridProps) => {
+  const containerRef = React.useRef<HTMLDivElement>(null);
+  const scrollPosRef = React.useRef(0);
+
+  // Capture scroll position before each render pass
+  const handleScroll = React.useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    scrollPosRef.current = e.currentTarget.scrollTop;
+  }, []);
+
+  // Restore scroll position after DOM mutations to prevent 'jump to top' on reorder
+  React.useLayoutEffect(() => {
+    if (containerRef.current) {
+      containerRef.current.scrollTop = scrollPosRef.current;
+    }
+  });
+
   const renderStartTime = performance.now();
   
   React.useEffect(() => {
@@ -66,7 +81,14 @@ export const GameGrid = React.memo(({
   const actionFailed = lastActionResult?.success === false;
 
   return (
-    <Box flex={3} display="flex" flexDirection="column" sx={{ overflowY: 'auto' }}>
+    <Box 
+      ref={containerRef}
+      onScroll={handleScroll}
+      flex={3} 
+      display="flex" 
+      flexDirection="column" 
+      sx={{ overflowY: 'auto', position: 'relative' }}
+    >
       <Box display="flex" justifyContent="space-between" alignItems="center">
         <Typography variant="h4" gutterBottom>Super Connections ({numCategories}x{gridSize})</Typography>
         {roomCode && (

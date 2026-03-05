@@ -93,7 +93,7 @@ export const TileMenu = ({
   const canRemoveGroup = activeTile && activeTile.userGroupId && (groupCounts[activeTile.userGroupId] || 0) === 1 && activeTile.itemCount === 1;
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth scroll="paper">
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth scroll="paper" disableScrollLock>
       <DialogTitle sx={{ pb: 1 }}>Assign Group</DialogTitle>
       <DialogContent sx={{ pt: 1 }}>
         <TextField
