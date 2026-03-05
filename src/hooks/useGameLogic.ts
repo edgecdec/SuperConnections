@@ -127,11 +127,8 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, []);
 
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
-    let result: { next: GameState, success: boolean } = { next: prevState, success: true };
+    let result: { next: GameState, success: boolean } = { next: { ...prevState, lastActionResult: null }, success: true };
     
-    // Auto-clear result on every new action attempt to prevent "Stale Errors"
-    prevState.lastActionResult = null;
-
     switch (action.type) {
       case 'START_GAME':
         result.next = {
@@ -288,7 +285,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     setTimeout(() => setState(prev => ({ ...prev, lastActionResult: null })), 1500);
   }, []);
 
-  const { dispatchAction, isHost } = useSocket(state.roomCode, ns => { isRemoteUpdate.current = true; setState(ns); setIsPlaying(true); setTimeout(() => { isRemoteUpdate.current = false; }, 200); }, () => isPlaying ? stateRef.current : null, a => setState(prev => applyActionToState(a, prev).next), onActionResult);
+  const { dispatchAction, isHost, userId } = useSocket(state.roomCode, ns => { isRemoteUpdate.current = true; setState(ns); setIsPlaying(true); setTimeout(() => { isRemoteUpdate.current = false; }, 200); }, () => isPlaying ? stateRef.current : null, a => setState(prev => applyActionToState(a, prev).next), onActionResult);
 
   const [localTouchedGroupIds, setLocalTouchedGroupIds] = useState<string[]>([]);
 
@@ -329,21 +326,18 @@ export function useGameLogic(initialRoomCode: string | null) {
     setState(prev => {
       const result = applyActionToState(action, prev);
       
-      // Multiplayer Optimistic Pass: We MUST clear the old result here too
-      if (prev.roomCode) {
-        return {
-          ...result.next,
-          lastActionResult: null // Clear previous errors during optimistic update
-        };
-      }
-
-      // Local Pass
-      if (!prev.roomCode && (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId))) {
-        const currentStats = prev.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
+      const scoreDiff = result.next.score - prev.score;
+      const mistakeDiff = result.next.mistakes - prev.mistakes;
+      
+      // Atomic Contribution Stats (Optimistic for both Local & Multiplayer)
+      const currentUserId = prev.roomCode ? userId : 'local';
+      
+      if (currentUserId && prev.playerStats[currentUserId]) {
+        const currentStats = prev.playerStats[currentUserId];
         const updatedStats = {
           ...currentStats,
-          score: result.success ? currentStats.score + 1 : currentStats.score,
-          mistakes: !result.success ? currentStats.mistakes + 1 : currentStats.mistakes,
+          score: currentStats.score + (scoreDiff > 0 ? scoreDiff : 0),
+          mistakes: currentStats.mistakes + (mistakeDiff > 0 ? mistakeDiff : 0),
           lastActive: Date.now()
         };
         
@@ -353,8 +347,8 @@ export function useGameLogic(initialRoomCode: string | null) {
         
         return {
           ...result.next,
-          playerStats: { ...prev.playerStats, local: updatedStats },
-          lastActionResult: { success: result.success, actionType: action.type, involvedTileIds }
+          playerStats: { ...prev.playerStats, [currentUserId]: updatedStats },
+          lastActionResult: prev.roomCode ? null : { success: result.success, actionType: action.type, involvedTileIds }
         };
       }
 
@@ -368,7 +362,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     if (stateRef.current.roomCode) dispatchAction(action);
     const endTime = performance.now();
     log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
-  }, [dispatchAction, applyActionToState, trackLocalTouch]);
+  }, [dispatchAction, applyActionToState, trackLocalTouch, userId]);
 
   // PUBLIC MODULAR API
   const game = useMemo(() => ({
@@ -560,5 +554,5 @@ export function useGameLogic(initialRoomCode: string | null) {
     return state.tiles.filter(t => !t.locked);
   }, [state.tiles]);
 
-  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef };
+  return { state, isPlaying, isHost, userId, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef };
 }

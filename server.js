@@ -122,7 +122,7 @@ app.prepare().then(() => {
        if (!rooms[roomCode]) {
            rooms[roomCode] = {
                hostId: userId,
-               state: initialGameState || null,
+               state: initialGameState || { tiles: [], userGroups: [], completedCategories: [], mistakes: 0, score: 0, playerStats: {}, settings: { numCategories: 4, itemsPerCategory: 4, gravity: 'up', popToTop: true } },
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
@@ -209,6 +209,9 @@ app.prepare().then(() => {
         if (room.cleanupTimer) clearTimeout(room.cleanupTimer);
 
         const state = room.state;
+        const oldScore = state.score;
+        const oldMistakes = state.mistakes;
+        
         let stateChanged = false;
         let actionResult = { success: true, message: '' };
 
@@ -337,12 +340,15 @@ app.prepare().then(() => {
 
         socket.emit('action_result', actionResult);
 
+        // Update player-specific stats based on GLOBAL diffs
         if (state.playerStats && state.playerStats[userId]) {
             state.playerStats[userId].lastActive = Date.now();
-            if (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId)) {
-                if (actionResult.success) state.playerStats[userId].score += 1;
-                else state.playerStats[userId].mistakes += 1;
-            }
+            
+            const scoreDiff = state.score - oldScore;
+            const mistakeDiff = state.mistakes - oldMistakes;
+            
+            if (scoreDiff > 0) state.playerStats[userId].score += scoreDiff;
+            if (mistakeDiff > 0) state.playerStats[userId].mistakes += mistakeDiff;
         }
 
         const groupCounts = state.tiles.reduce((acc, tile) => {

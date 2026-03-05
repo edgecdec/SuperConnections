@@ -13,6 +13,7 @@ export function useSocket(
 ) {
   const socketRef = useRef<any>(null);
   const [isHost, setIsHost] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
   
   // Use Refs for all callbacks to ensure socket listeners always use the latest logic
   // without triggering a socket reconnect cycle.
@@ -33,6 +34,7 @@ export function useSocket(
   useEffect(() => {
     if (!roomCode) {
       setIsHost(false);
+      setUserId(null);
       return;
     }
 
@@ -50,8 +52,9 @@ export function useSocket(
     });
 
     socket.on('init_session', (data: { isHost: boolean, userId: string }) => {
-      log(`Session initialized. Host: ${data.isHost}`);
+      log(`Session initialized. Host: ${data.isHost}, UserID: ${data.userId}`);
       setIsHost(data.isHost);
+      setUserId(data.userId);
     });
 
     socket.on('state_update', (newState: GameState) => {
@@ -98,5 +101,5 @@ export function useSocket(
     }
   }, [roomCode]);
 
-  return { dispatchAction, isHost };
+  return { dispatchAction, isHost, userId };
 }
