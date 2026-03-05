@@ -6,6 +6,7 @@ export type Tile = {
   locked: boolean;
   itemCount: number;
   col: number;
+  order: number;
   hidden?: boolean;
 };
 

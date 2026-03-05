@@ -34,9 +34,14 @@ function applyGridPhysics(tiles, settings, numCols, survivorId = null) {
   });
   colBuckets.forEach(bucket => {
     if (bucket.length === 0) return;
-    const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hiddenOrLocked = bucket.filter(t => t.hidden || t.locked);
-    const survivor = bucket.find(t => t.id === survivorId);
+    
+    // DETERMINISTIC SORT: Within each column, tiles are ordered by their 'order' key.
+    const sortedBucket = [...bucket].sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    const active = sortedBucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
+    const hiddenOrLocked = sortedBucket.filter(t => t.hidden || t.locked);
+    const survivor = sortedBucket.find(t => t.id === survivorId);
+    
     bucket.length = 0;
     if (survivor && settings.popToTop) bucket.push(survivor);
     else if (survivor) active.unshift(survivor);
@@ -146,7 +151,6 @@ app.prepare().then(() => {
            userId: userId
        });
 
-       // SERVER IS SOURCE OF TRUTH: If room has tiles, send them to the joiner
        if (room.state && room.state.tiles && room.state.tiles.length > 0) {
            socket.emit('state_update', room.state);
        }
@@ -173,7 +177,7 @@ app.prepare().then(() => {
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            survivor.text = Array.from(new Set([...survivor.text.split(', '), ...merged.text.split(', ')])).join(', ');
+            survivor.text = Array.from(new Set([...survivor.text.split(', ').map(s => s.trim()), ...merged.text.split(', ').map(s => s.trim())])).join(', ');
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
 
@@ -192,7 +196,6 @@ app.prepare().then(() => {
             return true;
         } else {
             state.mistakes += 1;
-            // Mistake physics pass to ensure definitive sync
             state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
             return false;
         }
@@ -279,10 +282,10 @@ app.prepare().then(() => {
             case 'REFILL_BOARD': {
                 const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
                 const locked = state.tiles.filter(t => t.locked);
-                // SYNCED SHUFFLE
                 const shuffledUnlocked = shuffleArray(unlocked);
                 const tpr = state.tilesPerRow;
-                state.tiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr }));
+                // Re-assign order and col
+                state.tiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr, order: i }));
                 state.tiles = applyGridPhysics(state.tiles, state.settings, tpr);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
@@ -314,9 +317,10 @@ app.prepare().then(() => {
                     if (direction === 'top') {
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow, tileId);
                     } else {
+                        const wasHidden = tile.hidden;
                         tile.hidden = true;
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
-                        tile.hidden = false;
+                        tile.hidden = wasHidden;
                     }
                     stateChanged = true;
                     actionResult = { success: true, actionType: action.type };

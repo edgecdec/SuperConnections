@@ -9,18 +9,15 @@ export function applyGridPhysics(tiles: any[], settings: any, numCols: number, s
     return tiles;
   }
 
-  // Ensure numCols is valid
   const columns = numCols || 25;
   const colBuckets = Array.from({ length: columns }, () => [] as any[]);
 
   // 1. Sort tiles into their permanent vertical tracks
   tiles.forEach(tile => {
-    // We strictly respect tile.col. If missing, we fallback to 0.
     const col = (tile.col !== undefined) ? tile.col : 0;
     if (colBuckets[col]) {
       colBuckets[col].push(tile);
     } else {
-      // Fallback for safety: if col is out of bounds, put in col 0
       colBuckets[0].push(tile);
     }
   });
@@ -29,10 +26,14 @@ export function applyGridPhysics(tiles: any[], settings: any, numCols: number, s
   colBuckets.forEach(bucket => {
     if (bucket.length === 0) return;
 
-    // Filter into pools to maintain relative order
-    const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hiddenOrLocked = bucket.filter(t => t.hidden || t.locked);
-    const survivor = bucket.find(t => t.id === survivorId);
+    // DETERMINISTIC SORT: Within each column, tiles are ordered by their 'order' key.
+    // This prevents items from jumping around due to main array reordering.
+    const sortedBucket = [...bucket].sort((a, b) => (a.order || 0) - (b.order || 0));
+
+    // Filter into pools while maintaining the internal 'order'
+    const active = sortedBucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
+    const hiddenOrLocked = sortedBucket.filter(t => t.hidden || t.locked);
+    const survivor = sortedBucket.find(t => t.id === survivorId);
 
     bucket.length = 0;
     

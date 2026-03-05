@@ -120,7 +120,9 @@ export function useGameLogic(initialRoomCode: string | null) {
 
       return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, success: true };
     } else {
-      return { next: { ...prevState, mistakes: prevState.mistakes + 1 }, success: false };
+      // Definitive physics pass on failure to maintain sync
+      const nextTiles = applyGridPhysics(prevState.tiles, prevState.settings, prevState.tilesPerRow);
+      return { next: { ...prevState, tiles: nextTiles, mistakes: prevState.mistakes + 1 }, success: false };
     }
   }, []);
 
@@ -182,8 +184,8 @@ export function useGameLogic(initialRoomCode: string | null) {
         const shuffledUnlocked = shuffleArray(unlocked);
         const tpr = prevState.tilesPerRow;
         
-        // Re-assign columns based on new shuffled order
-        const refilledTiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr }));
+        // Re-assign columns AND order based on new shuffled order
+        const refilledTiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr, order: i }));
         
         result.next = { 
           ...prevState, 
@@ -434,7 +436,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       let initialTiles: Tile[] = [];
       selectedCatsInfo.forEach((cat) => {
         cat.items.forEach(item => {
-          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1, col: 0 });
+          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1, col: 0, order: 0 });
         });
       });
 
@@ -442,9 +444,11 @@ export function useGameLogic(initialRoomCode: string | null) {
       const shuffledTiles = shuffleArray(initialTiles);
       
       // Then assign them to columns sequentially based on their random position
+      // AND assign a permanent 'order' key based on this shuffle.
       const positionedTiles = shuffledTiles.map((tile, idx) => ({
         ...tile,
-        col: idx % numCategories
+        col: idx % numCategories,
+        order: idx
       }));
 
       // Apply initial physics to group them correctly
