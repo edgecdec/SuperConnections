@@ -7,6 +7,8 @@ export type Tile = {
   itemCount: number;
   col: number;
   order: number;
+  durableKey: number;
+  isMaster?: boolean;
   hidden?: boolean;
 };
 
@@ -14,6 +16,7 @@ export type UserGroup = {
   id: string;
   name: string;
   color: string;
+  words: string[];
   lastUpdated: number;
 };
 

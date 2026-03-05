@@ -17,6 +17,8 @@ interface TileProps {
   onDrop: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onTileAuxClick: (e: React.MouseEvent, tile: Tile) => void;
   tooltipText: string;
+  gridColumn?: number;
+  gridRow?: number;
 }
 
 export const TileComponent = React.memo(({
@@ -31,7 +33,9 @@ export const TileComponent = React.memo(({
   onDragOver,
   onDrop,
   onTileAuxClick,
-  tooltipText
+  tooltipText,
+  gridColumn,
+  gridRow
 }: TileProps) => {
   // --- PERFORMANCE LOG ---
   console.log(`[${new Date().toLocaleTimeString()}] [RENDER] Tile ${tile.id}`);
@@ -59,6 +63,8 @@ export const TileComponent = React.memo(({
         onDrop={(e) => onDrop(e, tile)}
         className={isError ? 'shake-error' : ''}
         sx={{
+          gridColumn,
+          gridRow,
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
@@ -112,7 +118,10 @@ export const TileComponent = React.memo(({
          prev.tile.itemCount === next.tile.itemCount &&
          prev.tile.locked === next.tile.locked &&
          prev.tile.hidden === next.tile.hidden &&
+         prev.tile.durableKey === next.tile.durableKey &&
          prev.group?.color === next.group?.color &&
+         prev.gridColumn === next.gridColumn &&
+         prev.gridRow === next.gridRow &&
          prev.group?.name === next.group?.name;
 });
 

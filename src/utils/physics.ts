@@ -4,69 +4,59 @@
  * perfectly synchronized board layouts.
  */
 
-export function applyGridPhysics(tiles: any[], settings: any, numCols: number, survivorId: string | null = null) {
-  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
-    // Even if physics is off, we ensure order keys are consistent with array indices
-    return tiles.map((t, i) => ({ ...t, order: i }));
-  }
+export function applyGridPhysics(tiles: any[], settings: any, tilesPerRow: number, survivorId: string | null = null) {
+  const numCols = tilesPerRow || 25;
+  
+  // 1. Separate active from inactive tiles
+  // Inactive tiles (locked or hidden) don't participate in gravity
+  const activeTiles = tiles.filter(t => !t.hidden && !t.locked);
+  const inactiveTiles = tiles.filter(t => t.hidden || t.locked);
 
-  const columns = numCols || 25;
-  const colBuckets = Array.from({ length: columns }, () => [] as any[]);
+  // 2. Bucket active tiles by their current column to prevent left/right shifting
+  const colBuckets = Array.from({ length: numCols }, () => [] as any[]);
 
-  // 1. Sort tiles into their permanent vertical tracks
-  tiles.forEach(tile => {
-    const col = (tile.col !== undefined) ? tile.col : 0;
-    if (colBuckets[col]) {
-      colBuckets[col].push(tile);
-    } else {
-      colBuckets[0].push(tile);
-    }
+  activeTiles.forEach(tile => {
+    // Fallback to col or array index if durableKey is missing
+    const currentKey = tile.durableKey !== undefined ? tile.durableKey : (tile.col !== undefined ? tile.col : tiles.indexOf(tile));
+    let col = currentKey % numCols;
+    if (isNaN(col) || col < 0 || col >= numCols) col = 0;
+    colBuckets[col].push(tile);
   });
 
-  // 2. Apply physics within each vertical track
-  colBuckets.forEach(bucket => {
-    if (bucket.length === 0) return;
+  // 3. Process each column: Sort vertically, apply Pop to Top, then Compact
+  const nextActive: any[] = [];
+  
+  colBuckets.forEach((bucket, colIdx) => {
+    // Preserve relative vertical ordering using the existing durableKey
+    bucket.sort((a, b) => {
+      const keyA = a.durableKey !== undefined ? a.durableKey : (a.order !== undefined ? a.order : tiles.indexOf(a));
+      const keyB = b.durableKey !== undefined ? b.durableKey : (b.order !== undefined ? b.order : tiles.indexOf(b));
+      return keyA - keyB;
+    });
 
-    // DETERMINISTIC SORT: Within each column, tiles are ordered by their CURRENT 'order' key.
-    const sortedBucket = [...bucket].sort((a, b) => (a.order || 0) - (b.order || 0));
-
-    const active = sortedBucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hiddenOrLocked = sortedBucket.filter(t => t.hidden || t.locked);
-    const survivor = sortedBucket.find(t => t.id === survivorId);
-
-    bucket.length = 0;
-    
-    // Rebuild the column: [Survivor] -> [Active] -> [Hidden]
-    if (survivor && settings.popToTop) {
-      bucket.push(survivor);
-    } else if (survivor) {
-      active.unshift(survivor);
+    // Handle "Pop to Top" for the survivor or manual move
+    if (survivorId && (settings?.popToTop || survivorId === survivorId)) {
+      const sIdx = bucket.findIndex(t => t.id === survivorId);
+      if (sIdx !== -1) {
+        const sTile = bucket.splice(sIdx, 1)[0];
+        bucket.unshift(sTile);
+      }
     }
 
-    if (settings.gravity === 'up') {
-      bucket.push(...active, ...hiddenOrLocked);
-    } else {
-      bucket.push(...active, ...hiddenOrLocked);
-    }
+    // Assign new explicit compacted durableKey purely upward
+    // Key = colIdx + (rowIdx * numCols)
+    bucket.forEach((tile, rowIdx) => {
+      tile.durableKey = colIdx + (rowIdx * numCols);
+      // Keep legacy properties in sync for safety
+      tile.col = colIdx;
+      tile.order = tile.durableKey; 
+      nextActive.push(tile);
+    });
   });
 
-  // 3. Re-flatten row-by-row
-  const flattened: any[] = [];
-  const maxRows = Math.max(...colBuckets.map(b => b.length));
+  // 4. Sort the active array by durableKey so it's row-major for rendering
+  nextActive.sort((a, b) => a.durableKey - b.durableKey);
 
-  for (let r = 0; r < maxRows; r++) {
-    for (let c = 0; c < columns; c++) {
-      const tile = colBuckets[c][r];
-      if (tile) flattened.push(tile);
-    }
-  }
-
-  // 4. PERSIST THE LAYOUT: 
-  // Update every tile's 'order' key to its new position in the flattened array.
-  // This ensures that the next time the engine runs (mistake/refresh), 
-  // the 'sortedBucket' pass above will see this new arrangement as the 'Truth'.
-  return flattened.map((tile, idx) => ({
-    ...tile,
-    order: idx
-  }));
+  // 5. Append inactive tiles to the end
+  return [...nextActive, ...inactiveTiles];
 }

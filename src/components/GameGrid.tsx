@@ -56,18 +56,11 @@ export const GameGrid = React.memo(({
     }
   }, [scrollPosRef]);
 
-  // Restore scroll position after DOM mutations to prevent 'jump to top' on reorder
+  // Restore scroll position after DOM mutations
   React.useLayoutEffect(() => {
     if (containerRef.current && scrollPosRef && 'current' in scrollPosRef && scrollPosRef.current !== null) {
       containerRef.current.scrollTop = scrollPosRef.current;
     }
-  });
-
-  const renderStartTime = performance.now();
-  
-  React.useEffect(() => {
-    const renderEndTime = performance.now();
-    console.log(`[${new Date().toLocaleTimeString()}] [PERF] GameGrid render committed in ${(renderEndTime - renderStartTime).toFixed(2)}ms`);
   });
 
   const handleDragOver = React.useCallback((e: React.DragEvent) => {
@@ -114,8 +107,11 @@ export const GameGrid = React.memo(({
             const group = groupIdMap[tile.userGroupId || ''];
             const tooltipText = group ? groupItemMap[group.id] : tile.text;
 
-            return tile.hidden ? 
-              <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} /> :
+            // Mathematical grid positioning based on durableKey
+            const colIdx = tile.durableKey !== undefined ? (tile.durableKey % tilesPerRow) + 1 : undefined;
+            const rowIdx = tile.durableKey !== undefined ? Math.floor(tile.durableKey / tilesPerRow) + 1 : undefined;
+
+            return (
               <TileComponent 
                 key={tile.id} 
                 tile={tile} 
@@ -130,7 +126,10 @@ export const GameGrid = React.memo(({
                 onDrop={onDrop} 
                 onTileAuxClick={onTileAuxClick}
                 tooltipText={tooltipText}
-              />;
+                gridColumn={colIdx}
+                gridRow={rowIdx}
+              />
+            );
           })}
           {completedCategories.map(cat => (
             <Paper key={cat} sx={{ gridColumn: '1 / -1', p: 2, mt: 1, backgroundColor: '#d4edda', textAlign: 'center', border: '2px solid #2e7d32' }}>

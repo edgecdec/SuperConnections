@@ -24,37 +24,44 @@ const parseCookie = (str, name) => {
 
 // SHARED PHYSICS ENGINE (Mirror of src/utils/physics.ts)
 function applyGridPhysics(tiles, settings, numCols, survivorId = null) {
-  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
-    return tiles.map((t, i) => ({ ...t, order: i }));
-  }
   const columns = numCols || 25;
+  const activeTiles = tiles.filter(t => !t.hidden && !t.locked);
+  const inactiveTiles = tiles.filter(t => t.hidden || t.locked);
   const colBuckets = Array.from({ length: columns }, () => []);
-  tiles.forEach(tile => {
-    const col = (tile.col !== undefined) ? tile.col : 0;
-    if (colBuckets[col]) colBuckets[col].push(tile);
-    else colBuckets[0].push(tile);
+
+  activeTiles.forEach(tile => {
+    const currentKey = tile.durableKey !== undefined ? tile.durableKey : (tile.col !== undefined ? tile.col : tiles.indexOf(tile));
+    let col = currentKey % columns;
+    if (isNaN(col) || col < 0 || col >= columns) col = 0;
+    colBuckets[col].push(tile);
   });
-  colBuckets.forEach(bucket => {
-    if (bucket.length === 0) return;
-    const sortedBucket = [...bucket].sort((a, b) => (a.order || 0) - (b.order || 0));
-    const active = sortedBucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hiddenOrLocked = sortedBucket.filter(t => t.hidden || t.locked);
-    const survivor = sortedBucket.find(t => t.id === survivorId);
-    bucket.length = 0;
-    if (survivor && settings.popToTop) bucket.push(survivor);
-    else if (survivor) active.unshift(survivor);
-    bucket.push(...active, ...hiddenOrLocked);
-  });
-  const flattened = [];
-  const maxRows = Math.max(...colBuckets.map(b => b.length));
-  for (let r = 0; r < maxRows; r++) {
-    for (let c = 0; c < columns; c++) {
-      const tile = colBuckets[c][r];
-      if (tile) flattened.push(tile);
+
+  const nextActive = [];
+  colBuckets.forEach((bucket, colIdx) => {
+    bucket.sort((a, b) => {
+      const keyA = a.durableKey !== undefined ? a.durableKey : (a.order !== undefined ? a.order : tiles.indexOf(a));
+      const keyB = b.durableKey !== undefined ? b.durableKey : (b.order !== undefined ? b.order : tiles.indexOf(b));
+      return keyA - keyB;
+    });
+
+    if (survivorId && (settings?.popToTop || true)) {
+      const sIdx = bucket.findIndex(t => t.id === survivorId);
+      if (sIdx !== -1) {
+        const sTile = bucket.splice(sIdx, 1)[0];
+        bucket.unshift(sTile);
+      }
     }
-  }
-  // PERSIST NEW ORDER
-  return flattened.map((t, i) => ({ ...t, order: i }));
+
+    bucket.forEach((tile, rowIdx) => {
+      tile.durableKey = colIdx + (rowIdx * columns);
+      tile.col = colIdx;
+      tile.order = tile.durableKey;
+      nextActive.push(tile);
+    });
+  });
+
+  nextActive.sort((a, b) => a.durableKey - b.durableKey);
+  return [...nextActive, ...inactiveTiles];
 }
 
 const shuffleArray = (array) => {
@@ -166,19 +173,34 @@ app.prepare().then(() => {
             let targetId = survivor.userGroupId || merged.userGroupId || forceGroupId;
             if (!targetId) targetId = Math.random().toString(36).substring(2, 9);
 
+            const mergedWords = merged.userGroupId ? 
+                (state.userGroups.find(g => g.id === merged.userGroupId)?.words || [merged.text]) : 
+                [merged.text];
+
             const existingGroup = state.userGroups.find(g => g.id === targetId);
             if (!existingGroup) {
-                state.userGroups.push({ id: targetId, name: '', color: newGroupColor, lastUpdated: Date.now() });
+                const survivorWords = survivor.userGroupId ? 
+                    (state.userGroups.find(g => g.id === survivor.userGroupId)?.words || [survivor.text]) : 
+                    [survivor.text];
+
+                state.userGroups.push({ 
+                    id: targetId, 
+                    name: '', 
+                    color: newGroupColor, 
+                    words: Array.from(new Set([...survivorWords, ...mergedWords])),
+                    lastUpdated: Date.now() 
+                });
             } else {
+                existingGroup.words = Array.from(new Set([...(existingGroup.words || []), ...mergedWords]));
                 existingGroup.lastUpdated = Date.now();
             }
 
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            survivor.text = Array.from(new Set([...survivor.text.split(', '), ...merged.text.split(', ')])).join(', ');
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
+            survivor.isMaster = true;
 
             merged.hidden = true;
             merged.userGroupId = targetId;
@@ -275,28 +297,38 @@ app.prepare().then(() => {
             }
             case 'CREATE_GROUP': {
                 const { tileId, group } = action.payload;
-                if (!state.userGroups.find(g => g.id === group.id)) state.userGroups.push(group);
-                if (tileId) { const t = state.tiles.find(tile => tile.id === tileId); if (t) t.userGroupId = group.id; }
+                const newGroup = { ...group, words: [] };
+                if (tileId) { 
+                    const t = state.tiles.find(tile => tile.id === tileId); 
+                    if (t) {
+                        t.userGroupId = group.id; 
+                        t.isMaster = true;
+                        newGroup.words = t.userGroupId ? (state.userGroups.find(g => g.id === t.userGroupId)?.words || [t.text]) : [t.text];
+                    }
+                }
+                if (!state.userGroups.find(g => g.id === group.id)) state.userGroups.push(newGroup);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
             }
             case 'REFILL_BOARD': {
-                const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
-                const locked = state.tiles.filter(t => t.locked);
-                const refilledTiles = [...unlocked, ...locked];
+                let act = [...state.tiles.filter(t => !t.locked && !t.hidden)];
+                let inact = [...state.tiles.filter(t => t.locked || t.hidden)];
+                act.sort((a, b) => (a.durableKey || 0) - (b.durableKey || 0));
+                act = act.map((t, i) => ({ ...t, durableKey: i }));
                 const tpr = state.tilesPerRow;
-                state.tiles = applyGridPhysics(refilledTiles.map((t, i) => ({ ...t, col: i % tpr })), state.settings, tpr);
+                state.tiles = applyGridPhysics([...act, ...inact], state.settings, tpr);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
             }
             case 'SHUFFLE_BOARD': {
                 const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
-                const locked = state.tiles.filter(t => t.locked);
+                const locked = state.tiles.filter(t => t.locked || t.hidden);
                 const shuffledUnlocked = shuffleArray(unlocked);
                 const tpr = state.tilesPerRow;
-                state.tiles = applyGridPhysics(shuffledUnlocked.concat(locked).map((t, i) => ({ ...t, col: i % tpr, order: i })), state.settings, tpr);
+                const refilled = shuffledUnlocked.concat(locked).map((t, i) => ({ ...t, durableKey: i }));
+                state.tiles = applyGridPhysics(refilled, state.settings, tpr);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
@@ -304,7 +336,7 @@ app.prepare().then(() => {
             case 'UPDATE_SETTINGS': {
                 if (action.payload.tilesPerRow !== undefined) {
                     state.tilesPerRow = action.payload.tilesPerRow;
-                    state.tiles = applyGridPhysics(state.tiles.map((t, i) => ({ ...t, col: i % action.payload.tilesPerRow })), state.settings, state.tilesPerRow);
+                    state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
                 }
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
                 stateChanged = true;
@@ -326,10 +358,9 @@ app.prepare().then(() => {
                     if (direction === 'top') {
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow, tileId);
                     } else {
-                        const wasHidden = tile.hidden;
                         tile.hidden = true;
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
-                        tile.hidden = wasHidden;
+                        tile.hidden = false;
                     }
                     stateChanged = true;
                     actionResult = { success: true, actionType: action.type };
@@ -343,10 +374,8 @@ app.prepare().then(() => {
         // Update player-specific stats based on GLOBAL diffs
         if (state.playerStats && state.playerStats[userId]) {
             state.playerStats[userId].lastActive = Date.now();
-            
             const scoreDiff = state.score - oldScore;
             const mistakeDiff = state.mistakes - oldMistakes;
-            
             if (scoreDiff > 0) state.playerStats[userId].score += scoreDiff;
             if (mistakeDiff > 0) state.playerStats[userId].mistakes += mistakeDiff;
         }
