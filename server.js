@@ -335,40 +335,40 @@ app.prepare().then(() => {
 
         socket.emit('action_result', actionResult);
 
-        if (stateChanged) {
-            // Update contributor stats
-            if (state.playerStats && state.playerStats[userId]) {
-                state.playerStats[userId].lastActive = Date.now();
-                if (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId)) {
-                    if (actionResult.success) {
-                        state.playerStats[userId].score += 1;
-                    } else {
-                        state.playerStats[userId].mistakes += 1;
-                    }
+        // ALWAYS Update contributor stats and broadcast state if an action was attempted
+        // This prevents the 'bounce back' effect on mistakes by keeping all clients in sync with the current board order
+        if (state.playerStats && state.playerStats[userId]) {
+            state.playerStats[userId].lastActive = Date.now();
+            if (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId)) {
+                if (actionResult.success) {
+                    state.playerStats[userId].score += 1;
+                } else {
+                    state.playerStats[userId].mistakes += 1;
                 }
             }
+        }
 
-            if (!actionResult.success) socket.emit('state_update', state);
+        const groupCounts = state.tiles.reduce((acc, tile) => {
+            if (tile.userGroupId && !tile.locked && !tile.hidden) acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
+            return acc;
+        }, {});
 
-            const groupCounts = state.tiles.reduce((acc, tile) => {
-                if (tile.userGroupId && !tile.locked && !tile.hidden) acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
-                return acc;
-            }, {});
-
-            const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === state.gridSize).map(([gid]) => gid);
-            finishedGids.forEach(gid => {
-                const groupTiles = state.tiles.filter(t => t.userGroupId === gid && !t.locked);
-                if (groupTiles.length > 0) {
-                    const firstCategory = groupTiles[0].realCategory;
-                    if (groupTiles.every(t => t.realCategory === firstCategory) && !state.completedCategories.includes(firstCategory)) {
-                        state.completedCategories.push(firstCategory);
-                        state.tiles.forEach(t => { if (t.userGroupId === gid) { t.locked = true; t.userGroupId = null; } });
-                    }
+        const finishedGids = Object.entries(groupCounts).filter(([gid, count]) => count === state.gridSize).map(([gid]) => gid);
+        finishedGids.forEach(gid => {
+            const groupTiles = state.tiles.filter(t => t.userGroupId === gid && !t.locked);
+            if (groupTiles.length > 0) {
+                const firstCategory = groupTiles[0].realCategory;
+                if (groupTiles.every(t => t.realCategory === firstCategory) && !state.completedCategories.includes(firstCategory)) {
+                    state.completedCategories.push(firstCategory);
+                    state.tiles.forEach(t => { if (t.userGroupId === gid) { t.locked = true; t.userGroupId = null; } });
                 }
-            });
+            }
+        });
 
-            room.version = Date.now();
-            io.to(roomCode).emit('state_update', state);
+        room.version = Date.now();
+        // Broadcast the final state to everyone, ensuring consistent tile order
+        io.to(roomCode).emit('state_update', state);
+        if (stateChanged && actionResult.success) {
             socket.to(roomCode).emit('remote_action', action);
         }
     });
