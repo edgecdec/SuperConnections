@@ -120,8 +120,10 @@ export const GameGrid = React.memo(({
             const group = groupIdMap[tile.userGroupId || ''];
             const tooltipText = group ? groupItemMap[group.id] : tile.text;
 
-            return tile.hidden ? 
-              <Box key={tile.id} sx={{ minHeight: '80px', visibility: 'hidden' }} /> :
+            const colIdx = tile.durableKey !== undefined ? (tile.durableKey % tilesPerRow) + 1 : undefined;
+            const rowIdx = tile.durableKey !== undefined ? Math.floor(tile.durableKey / tilesPerRow) + 1 + completedCategories.length : undefined;
+
+            return (
               <TileComponent 
                 key={tile.id} 
                 tile={tile} 
@@ -136,7 +138,10 @@ export const GameGrid = React.memo(({
                 onDrop={onDrop} 
                 onTileDoubleClick={onTileDoubleClick}
                 tooltipText={tooltipText}
-              />;
+                gridColumn={colIdx}
+                gridRow={rowIdx}
+              />
+            );
           })}
         </Box>
       </Box>

@@ -5,58 +5,54 @@
  */
 
 export function applyGridPhysics(tiles: any[], settings: any, tilesPerRow: number, survivorId: string | null = null) {
-  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
-    return tiles;
-  }
+  const numCols = tilesPerRow || Math.max(1, settings?.numCategories || 4);
+  
+  // 1. Separate active from inactive tiles
+  const activeTiles = tiles.filter(t => !t.hidden && !t.locked);
+  const inactiveTiles = tiles.filter(t => t.hidden || t.locked);
 
-  const numCols = tilesPerRow;
+  // 2. Bucket active tiles by their current column to prevent left/right shifting
   const colBuckets = Array.from({ length: numCols }, () => [] as any[]);
 
-  // 1. Sort tiles into their permanent vertical tracks
-  tiles.forEach(tile => {
-    // If a tile doesn't have a column yet (e.g. from an old save), 
-    // we assign one based on its current index to prevent crashes.
-    const col = (tile.col !== undefined) ? tile.col : (tiles.indexOf(tile) % numCols);
-    if (colBuckets[col]) {
-      colBuckets[col].push(tile);
-    }
+  activeTiles.forEach(tile => {
+    // Fallback to array index if durableKey is missing (e.g. init or old state)
+    const currentKey = tile.durableKey !== undefined ? tile.durableKey : tiles.indexOf(tile);
+    let col = currentKey % numCols;
+    // Safety check just in case math is off
+    if (isNaN(col) || col < 0 || col >= numCols) col = 0;
+    colBuckets[col].push(tile);
   });
 
-  // 2. Apply physics within each vertical track
-  colBuckets.forEach(bucket => {
-    if (bucket.length === 0) return;
+  // 3. Sort each column vertically by their old durableKey, then compact them upward
+  const nextActive: any[] = [];
+  
+  colBuckets.forEach((bucket, colIdx) => {
+    // Preserve relative vertical ordering
+    bucket.sort((a, b) => {
+      const keyA = a.durableKey !== undefined ? a.durableKey : tiles.indexOf(a);
+      const keyB = b.durableKey !== undefined ? b.durableKey : tiles.indexOf(b);
+      return keyA - keyB;
+    });
 
-    // Separate the bucket into states
-    const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hidden = bucket.filter(t => t.hidden || t.locked);
-    const survivor = bucket.find(t => t.id === survivorId);
-
-    // Rebuild the column: [Survivor (if exists)] -> [Active Tiles] -> [Hidden/Locked Tiles]
-    bucket.length = 0;
-    if (survivor && settings.popToTop) {
-      bucket.push(survivor);
-    } else if (survivor) {
-      active.unshift(survivor);
-    }
-
-    if (settings.gravity === 'up') {
-      bucket.push(...active, ...hidden);
-    } else {
-      bucket.push(...active, ...hidden);
-    }
-  });
-
-  // 3. Re-flatten the columns back into a row-major 1D array for rendering
-  const flattened: any[] = [];
-  const maxRows = Math.max(...colBuckets.map(b => b.length));
-
-  for (let r = 0; r < maxRows; r++) {
-    for (let c = 0; c < numCols; c++) {
-      if (colBuckets[c][r]) {
-        flattened.push(colBuckets[c][r]);
+    // If popToTop is enabled (e.g., from a double-click reorder or explicit setting), move survivor to the top of its column
+    if (survivorId && settings?.popToTop) {
+      const survivorIdx = bucket.findIndex(t => t.id === survivorId);
+      if (survivorIdx > 0) { // If it's 0, it's already top
+        const survivor = bucket.splice(survivorIdx, 1)[0];
+        bucket.unshift(survivor);
       }
     }
-  }
 
-  return flattened;
+    // Assign new explicit compacted durableKey purely upward
+    bucket.forEach((tile, rowIdx) => {
+      tile.durableKey = colIdx + (rowIdx * numCols);
+      nextActive.push(tile);
+    });
+  });
+
+  // 4. Sort the active array row-by-row for the React rendering map
+  nextActive.sort((a, b) => a.durableKey - b.durableKey);
+
+  // 5. Append inactive tiles to the end of the state so they don't disrupt the flow
+  return [...nextActive, ...inactiveTiles];
 }

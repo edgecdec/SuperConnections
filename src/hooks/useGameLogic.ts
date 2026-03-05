@@ -89,12 +89,28 @@ export function useGameLogic(initialRoomCode: string | null) {
 
       let newUserGroups = [...prevState.userGroups];
       const existingGroupIndex = newUserGroups.findIndex(g => g.id === targetId);
-      
+
+      // Extract words from the merged tile (which itself could be a master)
+      const mergedWords = merged.userGroupId ? 
+        (prevState.userGroups.find(g => g.id === merged.userGroupId)?.words || [merged.text]) : 
+        [merged.text];
+
       if (existingGroupIndex === -1) {
-        newUserGroups.push({ id: targetId as string, name: '', color: newGroupColor, lastUpdated: Date.now() });
+        const survivorWords = survivor.userGroupId ? 
+          (prevState.userGroups.find(g => g.id === survivor.userGroupId)?.words || [survivor.text]) : 
+          [survivor.text];
+
+        newUserGroups.push({ 
+          id: targetId as string, 
+          name: '', 
+          color: newGroupColor, 
+          words: Array.from(new Set([...survivorWords, ...mergedWords])),
+          lastUpdated: Date.now() 
+        });
       } else {
         const existingGroup = newUserGroups[existingGroupIndex];
-        newUserGroups[existingGroupIndex] = { ...existingGroup, lastUpdated: Date.now() };
+        const newWords = Array.from(new Set([...(existingGroup.words || []), ...mergedWords]));
+        newUserGroups[existingGroupIndex] = { ...existingGroup, words: newWords, lastUpdated: Date.now() };
       }
 
       const sOldId = survivor.userGroupId;
@@ -103,12 +119,12 @@ export function useGameLogic(initialRoomCode: string | null) {
       let nextTiles = prevState.tiles.map(t => {
         if (t.id === mergedId) return { ...t, hidden: true, userGroupId: targetId };
         if (t.id === survivorId) {
-          const items = Array.from(new Set([...t.text.split(', ').map(s => s.trim()), ...merged.text.split(', ').map(s => s.trim())]));
+          // Keep text the same, but update itemCount and mark as master
           return { 
             ...t, 
-            text: items.join(', '),
             itemCount: t.itemCount + merged.itemCount,
-            userGroupId: targetId
+            userGroupId: targetId,
+            isMaster: true
           };
         }
         if ((sOldId && t.userGroupId === sOldId) || (mOldId && t.userGroupId === mOldId)) return { ...t, userGroupId: targetId };
@@ -169,14 +185,32 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
       case 'CREATE_GROUP':
         const existing = prevState.userGroups.find(g => g.id === action.payload.group.id);
+        
+        // If the group is new, ensure it has a words array based on the target block (if any)
+        const newGroup = { ...action.payload.group, words: [] as string[] };
+        if (action.payload.tileId) {
+          const t = prevState.tiles.find(tile => tile.id === action.payload.tileId);
+          if (t) newGroup.words = t.userGroupId ? (prevState.userGroups.find(g => g.id === t.userGroupId)?.words || [t.text]) : [t.text];
+        }
+
         result.next = { 
           ...prevState, 
-          userGroups: existing ? prevState.userGroups : [...prevState.userGroups, action.payload.group],
-          tiles: action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id } : t) : prevState.tiles
+          userGroups: existing ? prevState.userGroups : [...prevState.userGroups, newGroup],
+          tiles: action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id, isMaster: true } : t) : prevState.tiles
         };
         break;
       case 'REFILL_BOARD':
-        result.next = { ...prevState, tiles: [...prevState.tiles.filter(t => !t.locked && !t.hidden), ...prevState.tiles.filter(t => t.locked)] };
+        // Re-assign durable keys continuously from 0 to N to close any empty spots across the board
+        let act = [...prevState.tiles.filter(t => !t.locked && !t.hidden)];
+        let inact = [...prevState.tiles.filter(t => t.locked || t.hidden)];
+        
+        // Sort active by their current key to maintain relative ordering
+        act.sort((a, b) => (a.durableKey || 0) - (b.durableKey || 0));
+        
+        // Compact the keys
+        act = act.map((t, i) => ({ ...t, durableKey: i }));
+        
+        result.next = { ...prevState, tiles: [...act, ...inact] };
         break;
       case 'UPDATE_SETTINGS':
         result.next = { ...prevState, tilesPerRow: action.payload.tilesPerRow ?? prevState.tilesPerRow, autoRefill: action.payload.autoRefill ?? prevState.autoRefill };
@@ -335,7 +369,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       const targetTile = stateRef.current.tiles.find(t => t.id === targetId);
       if (targetTile?.userGroupId) return null;
       const newId = Math.random().toString(36).substring(2, 9);
-      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: '', color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), lastUpdated: Date.now() } } });
+      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: '', color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), words: [], lastUpdated: Date.now() } } });
       return newId;
     },
     renameGroup: (groupId: string, newName: string) => handleAction({ type: 'RENAME_GROUP', payload: { groupId, newName } }),
@@ -380,12 +414,26 @@ export function useGameLogic(initialRoomCode: string | null) {
 
       let initialTiles: Tile[] = [];
       selectedCatsInfo.forEach((cat, colIdx) => {
-        cat.items.forEach(item => {
-          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1, col: colIdx });
+        cat.items.forEach((item, rowIdx) => {
+          initialTiles.push({ 
+            id: Math.random().toString(36).substring(2, 9), 
+            text: item, 
+            realCategory: cat.name, 
+            userGroupId: null, 
+            locked: false, 
+            itemCount: 1, 
+            col: colIdx,
+            durableKey: (colIdx * itemsPerCategory) + rowIdx, // Temporary key before shuffle
+            isMaster: false
+          });
         });
       });
 
-      initialTiles = applyGridPhysics(shuffleArray(initialTiles), settings, numCategories);
+      // After shuffle, we explicitly re-assign sequential durableKeys up to N
+      let shuffledTiles = shuffleArray(initialTiles);
+      shuffledTiles = shuffledTiles.map((t, idx) => ({ ...t, durableKey: idx }));
+
+      initialTiles = applyGridPhysics(shuffledTiles, settings, numCategories);
 
       const newState: GameState = { 
         roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 
@@ -456,9 +504,13 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   const groupItemMap = useMemo(() => {
     const map: Record<string, string> = {};
-    state.tiles.forEach(t => { if (t.userGroupId && !t.hidden) { if (!map[t.userGroupId]) map[t.userGroupId] = t.text; else map[t.userGroupId] += ', ' + t.text; } });
+    state.userGroups.forEach(g => {
+      if (g.words && g.words.length > 0) {
+        map[g.id] = g.words.join(', ');
+      }
+    });
     return map;
-  }, [state.tiles]);
+  }, [state.userGroups]);
 
   const solvedItemMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -467,9 +519,8 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, [state.completedCategories, state.tiles]);
 
   const activeTiles = useMemo(() => {
-    // We must always return hidden tiles so the grid renders empty placeholders at the bottom,
-    // ensuring the columns stay vertically aligned. We only filter out fully 'locked' (solved) tiles.
-    return state.tiles.filter(t => !t.locked);
+    // Hidden placeholders are no longer needed because durableKey sets explicit grid positions.
+    return state.tiles.filter(t => !t.locked && !t.hidden);
   }, [state.tiles]);
 
   return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef };

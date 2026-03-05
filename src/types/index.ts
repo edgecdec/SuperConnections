@@ -5,7 +5,9 @@ export type Tile = {
   userGroupId: string | null;
   locked: boolean;
   itemCount: number;
-  col: number;
+  col?: number;
+  durableKey: number;
+  isMaster?: boolean;
   hidden?: boolean;
 };
 
@@ -13,6 +15,7 @@ export type UserGroup = {
   id: string;
   name: string;
   color: string;
+  words: string[];
   lastUpdated: number;
 };
 

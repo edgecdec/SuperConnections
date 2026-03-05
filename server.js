@@ -24,40 +24,45 @@ const parseCookie = (str, name) => {
 
 // SHARED PHYSICS LOGIC (Mirror of src/utils/physics.js)
 function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
-  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
-    return tiles;
-  }
+  const numCols = tilesPerRow || Math.max(1, settings?.numCategories || 4);
+  
+  const activeTiles = tiles.filter(t => !t.hidden && !t.locked);
+  const inactiveTiles = tiles.filter(t => t.hidden || t.locked);
 
-  const numCols = tilesPerRow;
   const colBuckets = Array.from({ length: numCols }, () => []);
 
-  tiles.forEach(tile => {
-    const col = (tile.col !== undefined) ? tile.col : (tiles.indexOf(tile) % numCols);
-    if (colBuckets[col]) colBuckets[col].push(tile);
+  activeTiles.forEach(tile => {
+    const currentKey = tile.durableKey !== undefined ? tile.durableKey : tiles.indexOf(tile);
+    let col = currentKey % numCols;
+    if (isNaN(col) || col < 0 || col >= numCols) col = 0;
+    colBuckets[col].push(tile);
   });
 
-  colBuckets.forEach(bucket => {
-    if (bucket.length === 0) return;
-    const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hidden = bucket.filter(t => t.hidden || t.locked);
-    const survivor = bucket.find(t => t.id === survivorId);
+  const nextActive = [];
+  
+  colBuckets.forEach((bucket, colIdx) => {
+    bucket.sort((a, b) => {
+      const keyA = a.durableKey !== undefined ? a.durableKey : tiles.indexOf(a);
+      const keyB = b.durableKey !== undefined ? b.durableKey : tiles.indexOf(b);
+      return keyA - keyB;
+    });
 
-    bucket.length = 0;
-    if (survivor && settings.popToTop) bucket.push(survivor);
-    else if (survivor) active.unshift(survivor);
-
-    if (settings.gravity === 'up') bucket.push(...active, ...hidden);
-    else bucket.push(...active, ...hidden);
-  });
-
-  const flattened = [];
-  const maxRows = Math.max(...colBuckets.map(b => b.length));
-  for (let r = 0; r < maxRows; r++) {
-    for (let c = 0; c < numCols; c++) {
-      if (colBuckets[c][r]) flattened.push(colBuckets[c][r]);
+    if (survivorId && settings?.popToTop) {
+      const survivorIdx = bucket.findIndex(t => t.id === survivorId);
+      if (survivorIdx > 0) {
+        const survivor = bucket.splice(survivorIdx, 1)[0];
+        bucket.unshift(survivor);
+      }
     }
-  }
-  return flattened;
+
+    bucket.forEach((tile, rowIdx) => {
+      tile.durableKey = colIdx + (rowIdx * numCols);
+      nextActive.push(tile);
+    });
+  });
+
+  nextActive.sort((a, b) => a.durableKey - b.durableKey);
+  return [...nextActive, ...inactiveTiles];
 }
 
 app.prepare().then(() => {
@@ -160,19 +165,34 @@ app.prepare().then(() => {
             let targetId = survivor.userGroupId || merged.userGroupId || forceGroupId;
             if (!targetId) targetId = Math.random().toString(36).substring(2, 9);
 
+            const mergedWords = merged.userGroupId ? 
+                (state.userGroups.find(g => g.id === merged.userGroupId)?.words || [merged.text]) : 
+                [merged.text];
+
             const existingGroup = state.userGroups.find(g => g.id === targetId);
             if (!existingGroup) {
-                state.userGroups.push({ id: targetId, name: '', color: newGroupColor, lastUpdated: Date.now() });
+                const survivorWords = survivor.userGroupId ? 
+                    (state.userGroups.find(g => g.id === survivor.userGroupId)?.words || [survivor.text]) : 
+                    [survivor.text];
+
+                state.userGroups.push({ 
+                    id: targetId, 
+                    name: '', 
+                    color: newGroupColor, 
+                    words: Array.from(new Set([...survivorWords, ...mergedWords])),
+                    lastUpdated: Date.now() 
+                });
             } else {
+                existingGroup.words = Array.from(new Set([...(existingGroup.words || []), ...mergedWords]));
                 existingGroup.lastUpdated = Date.now();
             }
 
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            survivor.text = Array.from(new Set([...survivor.text.split(', '), ...merged.text.split(', ')])).join(', ');
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
+            survivor.isMaster = true;
 
             merged.hidden = true;
             merged.userGroupId = targetId;
@@ -265,16 +285,28 @@ app.prepare().then(() => {
             }
             case 'CREATE_GROUP': {
                 const { tileId, group } = action.payload;
-                if (!state.userGroups.find(g => g.id === group.id)) state.userGroups.push(group);
-                if (tileId) { const t = state.tiles.find(tile => tile.id === tileId); if (t) t.userGroupId = group.id; }
+                const newGroup = { ...group, words: [] };
+                if (tileId) { 
+                    const t = state.tiles.find(tile => tile.id === tileId); 
+                    if (t) {
+                        t.userGroupId = group.id; 
+                        t.isMaster = true;
+                        newGroup.words = t.userGroupId ? (state.userGroups.find(g => g.id === t.userGroupId)?.words || [t.text]) : [t.text];
+                    }
+                }
+                if (!state.userGroups.find(g => g.id === group.id)) state.userGroups.push(newGroup);
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
             }
             case 'REFILL_BOARD': {
-                const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
-                const locked = state.tiles.filter(t => t.locked);
-                state.tiles = [...unlocked, ...locked];
+                let act = [...state.tiles.filter(t => !t.locked && !t.hidden)];
+                let inact = [...state.tiles.filter(t => t.locked || t.hidden)];
+                
+                act.sort((a, b) => (a.durableKey || 0) - (b.durableKey || 0));
+                act = act.map((t, i) => ({ ...t, durableKey: i }));
+                
+                state.tiles = [...act, ...inact];
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
