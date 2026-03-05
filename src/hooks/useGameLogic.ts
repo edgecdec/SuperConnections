@@ -202,13 +202,11 @@ export function useGameLogic(initialRoomCode: string | null) {
 
         const tile = nextTiles[tileIdx];
         if (direction === 'top') {
-          // Splice and unshift to top of column logic is in applyGridPhysics
           nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow, tileId);
         } else {
           // Manual Bottom: We'll sink it
           nextTiles = nextTiles.map(t => t.id === tileId ? { ...t, hidden: true } : t);
           nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow);
-          // Restore the tile but it's now at the bottom because applyGridPhysics pushes hidden to bottom
           nextTiles = nextTiles.map(t => t.id === tileId ? { ...t, hidden: false } : t);
         }
         result.next = { ...prevState, tiles: nextTiles };
@@ -280,7 +278,6 @@ export function useGameLogic(initialRoomCode: string | null) {
     if (typeof document !== 'undefined') {
       const grid = document.querySelector('.game-grid-scroll-container');
       if (grid) scrollPosRef.current = grid.scrollTop;
-      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
 
     if (action.type === 'TAG_TILE' && action.payload.groupId) trackLocalTouch(action.payload.groupId);
@@ -407,11 +404,13 @@ export function useGameLogic(initialRoomCode: string | null) {
       };
 
       if (multi) {
-        stateRef.current.roomCode = newState.roomCode;
-        setState(newState);
+        const newRoomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+        const newStateWithRoom = { ...newState, roomCode: newRoomCode };
+        stateRef.current = newStateWithRoom;
+        setState(newStateWithRoom);
         setIsPlaying(true);
         handleAction({ type: 'START_GAME', payload: { settings, tiles: initialTiles } });
-        router.push(`/?room=${newState.roomCode}`);
+        router.push(`/?room=${newRoomCode}`);
       } else {
         setState(newState);
         setIsPlaying(true);
@@ -419,7 +418,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
     },
     quit: () => { localStorage.removeItem('superConnectionsState'); setIsPlaying(false); setState(prev => ({ ...prev, roomCode: null })); router.push('/'); }
-  }), [handleAction, router]);
+  }), [handleAction, router, applyGridPhysics]);
 
   useEffect(() => {
     if (isLoaded) return;
@@ -468,6 +467,8 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, [state.completedCategories, state.tiles]);
 
   const activeTiles = useMemo(() => {
+    // We must always return hidden tiles so the grid renders empty placeholders at the bottom,
+    // ensuring the columns stay vertically aligned. We only filter out fully 'locked' (solved) tiles.
     return state.tiles.filter(t => !t.locked);
   }, [state.tiles]);
 

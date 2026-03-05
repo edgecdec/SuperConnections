@@ -4,13 +4,13 @@
  * perfectly synchronized board layouts.
  */
 
-function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
+export function applyGridPhysics(tiles: any[], settings: any, tilesPerRow: number, survivorId: string | null = null) {
   if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
     return tiles;
   }
 
   const numCols = tilesPerRow;
-  const colBuckets = Array.from({ length: numCols }, () => []);
+  const colBuckets = Array.from({ length: numCols }, () => [] as any[]);
 
   // 1. Sort tiles into their permanent vertical tracks
   tiles.forEach(tile => {
@@ -32,26 +32,22 @@ function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
     const survivor = bucket.find(t => t.id === survivorId);
 
     // Rebuild the column: [Survivor (if exists)] -> [Active Tiles] -> [Hidden/Locked Tiles]
-    // This creates the "Fall Upwards" effect.
     bucket.length = 0;
     if (survivor && settings.popToTop) {
       bucket.push(survivor);
     } else if (survivor) {
-      // If popToTop is off but gravity is on, survivor stays in active pool
       active.unshift(survivor);
     }
 
     if (settings.gravity === 'up') {
       bucket.push(...active, ...hidden);
     } else {
-      // If gravity is off, we must preserve the relative order of active/hidden 
-      // but the survivor has already been moved to the top if popToTop was on.
       bucket.push(...active, ...hidden);
     }
   });
 
   // 3. Re-flatten the columns back into a row-major 1D array for rendering
-  const flattened = [];
+  const flattened: any[] = [];
   const maxRows = Math.max(...colBuckets.map(b => b.length));
 
   for (let r = 0; r < maxRows; r++) {
@@ -63,11 +59,4 @@ function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
   }
 
   return flattened;
-}
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { applyGridPhysics };
-} else {
-  // For client-side usage if not using a bundler that handles module.exports
-  window.applyGridPhysics = applyGridPhysics;
 }
