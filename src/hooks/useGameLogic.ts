@@ -399,7 +399,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       const targetTile = stateRef.current.tiles.find(t => t.id === targetId);
       if (targetTile?.userGroupId) return null;
       const newId = Math.random().toString(36).substring(2, 9);
-      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: '', color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), lastUpdated: Date.now() } } });
+      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: '', color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), words: [], lastUpdated: Date.now() } } });
       return newId;
     },
     renameGroup: (groupId: string, newName: string) => handleAction({ type: 'RENAME_GROUP', payload: { groupId, newName } }),
