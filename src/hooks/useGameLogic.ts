@@ -18,6 +18,15 @@ const DEFAULT_SETTINGS: GameSettings = {
   gravity: 'up'
 };
 
+const shuffleArray = <T>(array: T[]): T[] => {
+  const next = [...array];
+  for (let i = next.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [next[i], next[j]] = [next[j], next[i]];
+  }
+  return next;
+};
+
 export function useGameLogic(initialRoomCode: string | null) {
   const router = useRouter();
   const [state, setState] = useState<GameState>({
@@ -65,7 +74,44 @@ export function useGameLogic(initialRoomCode: string | null) {
     console.log(`[${new Date().toLocaleTimeString()}] [LOGIC] ${msg}`);
   };
 
-  // --- STABLE PHYSICS ENGINE (CATEGORY-BASED) ---
+  // --- STABLE PHYSICS ENGINE ---
+
+  const applyPhysicsToTiles = useCallback((tiles: Tile[], settings: GameSettings, survivorId: string | null = null) => {
+    if (!settings.popToTop && settings.gravity !== 'up') return tiles;
+
+    const categories = Array.from(new Set(tiles.map(t => t.realCategory)));
+    const catColumns: Record<string, Tile[]> = {};
+    categories.forEach(cat => { catColumns[cat] = []; });
+    
+    tiles.forEach(tile => { catColumns[tile.realCategory].push(tile); });
+
+    categories.forEach(cat => {
+        const col = catColumns[cat];
+        if (survivorId) {
+          const sIdx = col.findIndex(t => t.id === survivorId);
+          if (sIdx !== -1) {
+              const sTile = col[sIdx];
+              col.splice(sIdx, 1);
+              col.unshift(sTile); 
+          }
+        }
+        if (settings.gravity === 'up') {
+            const active = col.filter(t => !t.hidden && !t.locked);
+            const hidden = col.filter(t => t.hidden || t.locked);
+            col.length = 0;
+            col.push(...active, ...hidden);
+        }
+    });
+
+    const flattenedTiles: Tile[] = [];
+    const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
+    for (let r = 0; r < maxRowItems; r++) {
+        categories.forEach(cat => {
+            if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
+        });
+    }
+    return flattenedTiles;
+  }, []);
 
   const applyMergeSurgical = useCallback((prevState: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): { next: GameState, success: boolean } => {
     const survivor = prevState.tiles.find(t => t.id === survivorId);
@@ -105,48 +151,13 @@ export function useGameLogic(initialRoomCode: string | null) {
         return t;
       });
 
-      // --- CATEGORY-BASED STABLE PHYSICS ---
-      if (prevState.settings.popToTop || prevState.settings.gravity === 'up') {
-        const categories = Array.from(new Set(nextTiles.map(t => t.realCategory)));
-        const catColumns: Record<string, Tile[]> = {};
-        categories.forEach(cat => { catColumns[cat] = []; });
-        
-        nextTiles.forEach(tile => { catColumns[tile.realCategory].push(tile); });
-
-        categories.forEach(cat => {
-            const col = catColumns[cat];
-            // Pop merged tile to top of its category group
-            const sIdx = col.findIndex(t => t.id === survivorId);
-            if (sIdx !== -1) {
-                const sTile = col[sIdx];
-                col.splice(sIdx, 1);
-                col.unshift(sTile); 
-            }
-            // Apply gravity: Active fall up, Hidden sink down
-            if (prevState.settings.gravity === 'up') {
-                const active = col.filter(t => !t.hidden && !t.locked);
-                const hidden = col.filter(t => t.hidden || t.locked);
-                col.length = 0;
-                col.push(...active, ...hidden);
-            }
-        });
-
-        // Re-Flatten DETERMINISTICALLY (One item from each category per row)
-        const flattenedTiles: Tile[] = [];
-        const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
-        for (let r = 0; r < maxRowItems; r++) {
-            categories.forEach(cat => {
-                if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
-            });
-        }
-        nextTiles = flattenedTiles;
-      }
+      nextTiles = applyPhysicsToTiles(nextTiles, prevState.settings, survivorId);
 
       return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, success: true };
     } else {
       return { next: { ...prevState, mistakes: prevState.mistakes + 1 }, success: false };
     }
-  }, []);
+  }, [applyPhysicsToTiles]);
 
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
     let result: { next: GameState, success: boolean } = { next: prevState, success: true };
@@ -220,7 +231,6 @@ export function useGameLogic(initialRoomCode: string | null) {
         break;
     }
 
-    // Completion Logic
     if (result.success && (action.type === 'MERGE_TILES' || action.type === 'TAG_TILE' || action.type === 'START_GAME')) {
       const groupCounts: Record<string, number> = {};
       result.next.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
@@ -251,8 +261,6 @@ export function useGameLogic(initialRoomCode: string | null) {
     return result;
   }, [applyMergeSurgical]);
 
-  // --- STABLE CALLBACKS FOR SOCKET ---
-
   const onActionResult = useCallback((response: ActionResponse) => {
     setState(prev => ({ ...prev, lastActionResult: response }));
     setTimeout(() => setState(prev => ({ ...prev, lastActionResult: null })), 1500);
@@ -280,11 +288,9 @@ export function useGameLogic(initialRoomCode: string | null) {
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
     
-    // CAPTURE SCROLL & BLUR
     if (typeof document !== 'undefined') {
       const grid = document.querySelector('.game-grid-scroll-container');
       if (grid) scrollPosRef.current = grid.scrollTop;
-      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
 
     if (action.type === 'TAG_TILE' && action.payload.groupId) trackLocalTouch(action.payload.groupId);
@@ -300,7 +306,6 @@ export function useGameLogic(initialRoomCode: string | null) {
     setState(prev => {
       const result = applyActionToState(action, prev);
       
-      // Atomic Contribution Stats
       if (!prev.roomCode && (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId))) {
         const currentStats = prev.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
         const updatedStats = {
@@ -333,7 +338,6 @@ export function useGameLogic(initialRoomCode: string | null) {
     log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
   }, [dispatchAction, applyActionToState, trackLocalTouch]);
 
-  // PUBLIC MODULAR API
   const game = useMemo(() => ({
     merge: (t1: string, t2: string) => handleAction({ type: 'MERGE_TILES', payload: { tile1Id: t1, tile2Id: t2, newGroupColor: getRandomColor(stateRef.current.userGroups.map(g => g.color)), newGroupId: Math.random().toString(36).substring(2, 9) } }),
     tag: (tileId: string, groupId: string | null) => handleAction({ type: 'TAG_TILE', payload: { tileId, groupId, newGroupId: Math.random().toString(36).substring(2, 9) } }),
@@ -352,6 +356,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     start: (multi: boolean, settings: GameSettings) => {
       const { numCategories, itemsPerCategory, difficulty, includeNiche, activeTags, manualCategories, customCategories } = settings;
       let selectedCatsInfo: { name: string, items: string[] }[] = [];
+
       if (customCategories && customCategories.length > 0) {
         selectedCatsInfo = customCategories.map(c => ({ name: c.name, items: c.items.slice(0, itemsPerCategory) })).slice(0, numCategories);
       } else {
@@ -362,29 +367,68 @@ export function useGameLogic(initialRoomCode: string | null) {
           if (activeTags.length > 0 && !cat.tags.some(tag => activeTags.includes(tag))) return false;
           return true;
         });
+
         let selectedNames: string[] = [];
         if (manualCategories.length > 0) { selectedNames = manualCategories.filter(name => categoriesData[name]); }
-        const remainingNeeded = numCategories - selectedNames.length;
-        if (remainingNeeded > 0) {
-          const randomPool = pool.filter(name => !selectedNames.includes(name)).sort(() => 0.5 - Math.random());
-          selectedNames = [...selectedNames, ...randomPool.slice(0, remainingNeeded)];
-        }
+        
+        const shuffledPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
         const usedItems = new Set<string>();
-        selectedNames.forEach(catName => {
+        
+        selectedNames.forEach(name => {
+          const items = categoriesData[name].items;
+          items.slice(0, itemsPerCategory).forEach(i => usedItems.add(i.toLowerCase()));
+        });
+
+        const finalSelectedNames = [...selectedNames];
+        for (const catName of shuffledPool) {
+          if (finalSelectedNames.length >= numCategories) break;
+          
           const cat = categoriesData[catName];
           let itemsPool = [...cat.items];
-          if (difficulty === 'easy') {} else if (difficulty === 'hard') { itemsPool = itemsPool.reverse(); } else { itemsPool = itemsPool.sort(() => 0.5 - Math.random()); }
+          if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
+          else if (difficulty === 'hard') itemsPool = [...itemsPool].reverse();
+
           let addedItems: string[] = [];
           for (const item of itemsPool) {
             if (addedItems.length >= itemsPerCategory) break;
-            if (!usedItems.has(item.toLowerCase())) { usedItems.add(item.toLowerCase()); addedItems.push(item); }
+            if (!usedItems.has(item.toLowerCase())) {
+              addedItems.push(item);
+            }
           }
-          if (addedItems.length > 0) { selectedCatsInfo.push({ name: catName, items: addedItems }); }
+
+          if (addedItems.length === itemsPerCategory) {
+            addedItems.forEach(i => usedItems.add(i.toLowerCase()));
+            finalSelectedNames.push(catName);
+            selectedCatsInfo.push({ name: catName, items: addedItems });
+          }
+        }
+        
+        selectedNames.forEach(catName => {
+           if (selectedCatsInfo.find(c => c.name === catName)) return;
+           const cat = categoriesData[catName];
+           let itemsPool = [...cat.items];
+           if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
+           else if (difficulty === 'hard') itemsPool = [...itemsPool].reverse();
+           
+           let addedItems: string[] = [];
+           for (const item of itemsPool) {
+             if (addedItems.length >= itemsPerCategory) break;
+             addedItems.push(item);
+           }
+           if (addedItems.length > 0) {
+             selectedCatsInfo.push({ name: catName, items: addedItems });
+           }
         });
       }
+
       let initialTiles: Tile[] = [];
-      selectedCatsInfo.forEach(cat => { cat.items.forEach(item => { initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1 }); }); });
-      for (let i = initialTiles.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [initialTiles[i], initialTiles[j]] = [initialTiles[j], initialTiles[i]]; }
+      selectedCatsInfo.forEach(cat => {
+        cat.items.forEach(item => {
+          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1 });
+        });
+      });
+
+      initialTiles = applyPhysicsToTiles(shuffleArray(initialTiles), settings);
 
       const newState: GameState = { 
         roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 
@@ -403,13 +447,11 @@ export function useGameLogic(initialRoomCode: string | null) {
       };
 
       if (multi) {
-        const newRoomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-        const newStateWithRoom = { ...newState, roomCode: newRoomCode };
-        stateRef.current = newStateWithRoom;
-        setState(newStateWithRoom);
+        stateRef.current.roomCode = newState.roomCode;
+        setState(newState);
         setIsPlaying(true);
         handleAction({ type: 'START_GAME', payload: { settings, tiles: initialTiles } });
-        router.push(`/?room=${newRoomCode}`);
+        router.push(`/?room=${newState.roomCode}`);
       } else {
         setState(newState);
         setIsPlaying(true);
@@ -417,7 +459,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
     },
     quit: () => { localStorage.removeItem('superConnectionsState'); setIsPlaying(false); setState(prev => ({ ...prev, roomCode: null })); router.push('/'); }
-  }), [handleAction, router]);
+  }), [handleAction, router, applyPhysicsToTiles]);
 
   useEffect(() => {
     if (isLoaded) return;

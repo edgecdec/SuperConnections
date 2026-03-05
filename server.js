@@ -149,22 +149,19 @@ app.prepare().then(() => {
             // --- CATEGORY-BASED STABLE PHYSICS ---
             if (state.settings && (state.settings.popToTop || state.settings.gravity === 'up')) {
                 const categories = Array.from(new Set(state.tiles.map(t => t.realCategory)));
-                // Stable category order determines the visual column
                 const catColumns = {};
-                categories.forEach((cat, idx) => { catColumns[cat] = []; });
+                categories.forEach(cat => { catColumns[cat] = []; });
                 
                 state.tiles.forEach(tile => { catColumns[tile.realCategory].push(tile); });
 
                 categories.forEach(cat => {
                     const col = catColumns[cat];
-                    // Pop merged tile to top of its category group
                     const sIdx = col.findIndex(t => t.id === survivorId);
                     if (sIdx !== -1) {
                         const sTile = col[sIdx];
                         col.splice(sIdx, 1);
                         col.unshift(sTile);
                     }
-                    // Apply gravity: Active fall up, Hidden sink down
                     if (state.settings.gravity === 'up') {
                         const active = col.filter(t => !t.hidden && !t.locked);
                         const hidden = col.filter(t => t.hidden || t.locked);
@@ -173,7 +170,6 @@ app.prepare().then(() => {
                     }
                 });
 
-                // Re-Flatten DETERMINISTICALLY (One item from each category per row)
                 const flattenedTiles = [];
                 const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
                 for (let r = 0; r < maxRowItems; r++) {
