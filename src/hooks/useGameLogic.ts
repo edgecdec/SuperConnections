@@ -65,7 +65,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     console.log(`[${new Date().toLocaleTimeString()}] [LOGIC] ${msg}`);
   };
 
-  // --- ATOMIC SURGICAL ENGINE ---
+  // --- STABLE PHYSICS ENGINE (CATEGORY-BASED) ---
 
   const applyMergeSurgical = useCallback((prevState: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): { next: GameState, success: boolean } => {
     const survivor = prevState.tiles.find(t => t.id === survivorId);
@@ -93,11 +93,10 @@ export function useGameLogic(initialRoomCode: string | null) {
       let nextTiles = prevState.tiles.map(t => {
         if (t.id === mergedId) return { ...t, hidden: true, userGroupId: targetId };
         if (t.id === survivorId) {
-          const survivorItems = t.text.split(', ').map(s => s.trim());
-          const mergedItems = merged.text.split(', ').map(s => s.trim());
+          const items = Array.from(new Set([...t.text.split(', ').map(s => s.trim()), ...merged.text.split(', ').map(s => s.trim())]));
           return { 
             ...t, 
-            text: Array.from(new Set([...survivorItems, ...mergedItems])).join(', '),
+            text: items.join(', '),
             itemCount: t.itemCount + merged.itemCount,
             userGroupId: targetId
           };
@@ -106,41 +105,39 @@ export function useGameLogic(initialRoomCode: string | null) {
         return t;
       });
 
-      // True Column Gravity
-      if (prevState.settings.popToTop) {
-        const columns = prevState.tilesPerRow;
-        const gridColumns: Tile[][] = Array.from({ length: columns }, () => []);
-        let originalSurvivorColIdx = -1;
+      // --- CATEGORY-BASED STABLE PHYSICS ---
+      if (prevState.settings.popToTop || prevState.settings.gravity === 'up') {
+        const categories = Array.from(new Set(nextTiles.map(t => t.realCategory)));
+        const catColumns: Record<string, Tile[]> = {};
+        categories.forEach(cat => { catColumns[cat] = []; });
+        
+        nextTiles.forEach(tile => { catColumns[tile.realCategory].push(tile); });
 
-        nextTiles.forEach((tile, index) => {
-           const colIdx = index % columns;
-           if (tile.id === survivorId) originalSurvivorColIdx = colIdx;
-           gridColumns[colIdx].push(tile);
+        categories.forEach(cat => {
+            const col = catColumns[cat];
+            // Pop merged tile to top of its category group
+            const sIdx = col.findIndex(t => t.id === survivorId);
+            if (sIdx !== -1) {
+                const sTile = col[sIdx];
+                col.splice(sIdx, 1);
+                col.unshift(sTile); 
+            }
+            // Apply gravity: Active fall up, Hidden sink down
+            if (prevState.settings.gravity === 'up') {
+                const active = col.filter(t => !t.hidden && !t.locked);
+                const hidden = col.filter(t => t.hidden || t.locked);
+                col.length = 0;
+                col.push(...active, ...hidden);
+            }
         });
 
-        if (originalSurvivorColIdx !== -1) {
-            const col = gridColumns[originalSurvivorColIdx];
-            const sIdx = col.findIndex(t => t.id === survivorId);
-            const sTile = col[sIdx];
-            col.splice(sIdx, 1);
-            col.unshift(sTile); 
-        }
-
-        if (prevState.settings.gravity === 'up') {
-           gridColumns.forEach(col => {
-               const active = col.filter(t => !t.hidden && !t.locked);
-               const hidden = col.filter(t => t.hidden || t.locked);
-               col.length = 0;
-               col.push(...active, ...hidden);
-           });
-        }
-
+        // Re-Flatten DETERMINISTICALLY (One item from each category per row)
         const flattenedTiles: Tile[] = [];
-        const numRows = Math.ceil(nextTiles.length / columns);
-        for (let row = 0; row < numRows; row++) {
-            for (let col = 0; col < columns; col++) {
-                if (gridColumns[col][row]) flattenedTiles.push(gridColumns[col][row]);
-            }
+        const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
+        for (let r = 0; r < maxRowItems; r++) {
+            categories.forEach(cat => {
+                if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
+            });
         }
         nextTiles = flattenedTiles;
       }
@@ -283,10 +280,11 @@ export function useGameLogic(initialRoomCode: string | null) {
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
     
-    // CAPTURE SCROLL
+    // CAPTURE SCROLL & BLUR
     if (typeof document !== 'undefined') {
       const grid = document.querySelector('.game-grid-scroll-container');
       if (grid) scrollPosRef.current = grid.scrollTop;
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
 
     if (action.type === 'TAG_TILE' && action.payload.groupId) trackLocalTouch(action.payload.groupId);
