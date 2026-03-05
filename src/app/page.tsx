@@ -81,6 +81,20 @@ function GameContent() {
     } catch (err) { console.error(err); }
   }, [game]);
 
+  const onTileDoubleClick = useCallback((e: React.MouseEvent, tile: Tile) => {
+    if (tile.locked) return;
+    
+    if (e.ctrlKey) {
+      // Ctrl + Double Click -> Bottom
+      game.reorder(tile.id, 'bottom');
+    } else {
+      // Double Click -> Top (Except combined)
+      if (tile.itemCount === 1) {
+        game.reorder(tile.id, 'top');
+      }
+    }
+  }, [game]);
+
   const onRenameSave = useCallback((newName: string) => {
     if (groupToRename) {
       game.renameGroup(groupToRename, newName);
@@ -112,6 +126,7 @@ function GameContent() {
         completedCategories={state.completedCategories} activeTiles={activeTiles} selectedTile={selectedTile}
         lastActionResult={lastActionResult} groupIdMap={groupIdMap} groupItemMap={groupItemMap} solvedItemMap={solvedItemMap}
         onCopyRoomLink={handleCopyRoomLink} onMenuOpen={onMenuOpen} onTileClick={onTileClick} onDragStart={onDragStart} onDrop={onDrop}
+        onTileDoubleClick={onTileDoubleClick}
         scrollPosRef={scrollPosRef}
       />
 

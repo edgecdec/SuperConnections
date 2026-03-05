@@ -229,6 +229,44 @@ export function useGameLogic(initialRoomCode: string | null) {
           }
         };
         break;
+      case 'REORDER_TILE': {
+        const { tileId, direction } = action.payload;
+        const tile = prevState.tiles.find(t => t.id === tileId);
+        if (!tile || tile.locked || tile.hidden) break;
+
+        const categories = Array.from(new Set(prevState.tiles.map(t => t.realCategory)));
+        const catColumns: Record<string, Tile[]> = {};
+        categories.forEach(cat => { catColumns[cat] = []; });
+        prevState.tiles.forEach(t => { catColumns[t.realCategory].push(t); });
+
+        const col = catColumns[tile.realCategory];
+        const idx = col.findIndex(t => t.id === tileId);
+        if (idx !== -1) {
+            const t = col[idx];
+            col.splice(idx, 1);
+            if (direction === 'top') col.unshift(t);
+            else col.push(t);
+        }
+
+        // Standard gravity pass
+        categories.forEach(cat => {
+            const c = catColumns[cat];
+            const active = c.filter(t => !t.hidden && !t.locked);
+            const hidden = c.filter(t => t.hidden || t.locked);
+            c.length = 0;
+            c.push(...active, ...hidden);
+        });
+
+        const flattenedTiles: Tile[] = [];
+        const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
+        for (let r = 0; r < maxRowItems; r++) {
+            categories.forEach(cat => {
+                if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
+            });
+        }
+        result.next = { ...prevState, tiles: flattenedTiles };
+        break;
+      }
     }
 
     if (result.success && (action.type === 'MERGE_TILES' || action.type === 'TAG_TILE' || action.type === 'START_GAME')) {
@@ -260,6 +298,8 @@ export function useGameLogic(initialRoomCode: string | null) {
 
     return result;
   }, [applyMergeSurgical]);
+
+  // --- STABLE CALLBACKS FOR SOCKET ---
 
   const onActionResult = useCallback((response: ActionResponse) => {
     setState(prev => ({ ...prev, lastActionResult: response }));
@@ -353,6 +393,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     updateSettings: (s: any) => handleAction({ type: 'UPDATE_SETTINGS', payload: s }),
     refill: () => handleAction({ type: 'REFILL_BOARD' }),
     setPlayerName: (name: string) => handleAction({ type: 'SET_PLAYER_NAME', payload: { name } }),
+    reorder: (tileId: string, direction: 'top' | 'bottom') => handleAction({ type: 'REORDER_TILE', payload: { tileId, direction } }),
     start: (multi: boolean, settings: GameSettings) => {
       const { numCategories, itemsPerCategory, difficulty, includeNiche, activeTags, manualCategories, customCategories } = settings;
       let selectedCatsInfo: { name: string, items: string[] }[] = [];

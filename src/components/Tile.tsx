@@ -15,6 +15,7 @@ interface TileProps {
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
+  onTileDoubleClick: (e: React.MouseEvent, tile: Tile) => void;
   tooltipText: string;
 }
 
@@ -29,6 +30,7 @@ export const TileComponent = React.memo(({
   onDragStart,
   onDragOver,
   onDrop,
+  onTileDoubleClick,
   tooltipText
 }: TileProps) => {
   // --- PERFORMANCE LOG ---
@@ -49,6 +51,7 @@ export const TileComponent = React.memo(({
       <Paper
         elevation={isSelected ? 6 : 3}
         onClick={() => onTileClick(tile)}
+        onDoubleClick={(e) => onTileDoubleClick(e, tile)}
         draggable={!tile.locked}
         onDragStart={(e) => onDragStart(e, tile)}
         onDragOver={onDragOver}

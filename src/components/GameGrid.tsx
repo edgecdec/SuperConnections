@@ -22,6 +22,7 @@ interface GameGridProps {
   onTileClick: (tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>, targetTile: Tile) => void;
+  onTileDoubleClick: (e: React.MouseEvent, tile: Tile) => void;
   scrollPosRef: React.RefObject<number>;
 }
 
@@ -43,6 +44,7 @@ export const GameGrid = React.memo(({
   onTileClick,
   onDragStart,
   onDrop,
+  onTileDoubleClick,
   scrollPosRef
 }: GameGridProps) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -132,6 +134,7 @@ export const GameGrid = React.memo(({
                 onDragStart={onDragStart} 
                 onDragOver={handleDragOver} 
                 onDrop={onDrop} 
+                onTileDoubleClick={onTileDoubleClick}
                 tooltipText={tooltipText}
               />;
           })}

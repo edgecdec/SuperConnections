@@ -287,6 +287,46 @@ app.prepare().then(() => {
                 }
                 break;
             }
+            case 'REORDER_TILE': {
+                const { tileId, direction } = action.payload;
+                const tile = state.tiles.find(t => t.id === tileId);
+                if (tile && !tile.locked && !tile.hidden) {
+                    const categories = Array.from(new Set(state.tiles.map(t => t.realCategory)));
+                    const catColumns = {};
+                    categories.forEach(cat => { catColumns[cat] = []; });
+                    state.tiles.forEach(t => { catColumns[t.realCategory].push(t); });
+
+                    const col = catColumns[tile.realCategory];
+                    const idx = col.findIndex(t => t.id === tileId);
+                    if (idx !== -1) {
+                        const t = col[idx];
+                        col.splice(idx, 1);
+                        if (direction === 'top') col.unshift(t);
+                        else col.push(t);
+                    }
+
+                    // Standard gravity pass
+                    categories.forEach(cat => {
+                        const c = catColumns[cat];
+                        const active = c.filter(t => !t.hidden && !t.locked);
+                        const hidden = c.filter(t => t.hidden || t.locked);
+                        c.length = 0;
+                        c.push(...active, ...hidden);
+                    });
+
+                    const flattenedTiles = [];
+                    const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
+                    for (let r = 0; r < maxRowItems; r++) {
+                        categories.forEach(cat => {
+                            if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
+                        });
+                    }
+                    state.tiles = flattenedTiles;
+                    stateChanged = true;
+                    actionResult = { success: true, actionType: action.type };
+                }
+                break;
+            }
         }
 
         socket.emit('action_result', actionResult);
