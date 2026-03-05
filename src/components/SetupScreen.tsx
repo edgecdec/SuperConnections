@@ -62,7 +62,10 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const text = e.target?.result as string;
-      const rows = text.split('\n').map(r => r.split(',').map(c => c.trim()));
+      // Split by newline and then by comma, stripping whitespace and surrounding quotes
+      const rows = text.split('\n').map(r => 
+        r.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
+      );
       
       if (rows.length < 2) {
         setCsvError("CSV must have at least a header row and one item row.");
