@@ -118,7 +118,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       // Apply STABLE Grid Physics
       nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow, survivorId);
 
-      return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, success: true };
+      return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1, lastActionResult: null }, success: true };
     } else {
       // Definitive physics pass on failure to maintain sync
       const nextTiles = applyGridPhysics(prevState.tiles, prevState.settings, prevState.tilesPerRow);
@@ -129,6 +129,9 @@ export function useGameLogic(initialRoomCode: string | null) {
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
     let result: { next: GameState, success: boolean } = { next: prevState, success: true };
     
+    // Auto-clear result on every new action attempt to prevent "Stale Errors"
+    prevState.lastActionResult = null;
+
     switch (action.type) {
       case 'START_GAME':
         result.next = {
@@ -142,14 +145,15 @@ export function useGameLogic(initialRoomCode: string | null) {
           score: 0,
           tilesPerRow: action.payload.settings.numCategories,
           startTime: Date.now(),
-          playerStats: prevState.playerStats 
+          playerStats: prevState.playerStats,
+          lastActionResult: null
         };
         break;
       case 'MERGE_TILES':
         result = applyMergeSurgical(prevState, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
         break;
       case 'RENAME_GROUP':
-        result.next = { ...prevState, userGroups: prevState.userGroups.map(g => g.id === action.payload.groupId ? { ...g, name: action.payload.newName } : g) };
+        result.next = { ...prevState, userGroups: prevState.userGroups.map(g => g.id === action.payload.groupId ? { ...g, name: action.payload.newName } : g), lastActionResult: null };
         break;
       case 'TAG_TILE': {
         const { tileId, groupId, newGroupId } = action.payload;
@@ -158,14 +162,14 @@ export function useGameLogic(initialRoomCode: string | null) {
           const currentGroupId = tile?.userGroupId;
           const groupCount = currentGroupId ? prevState.tiles.reduce((acc, t) => (t.userGroupId === currentGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0) : 0;
           if (tile && tile.itemCount === 1 && groupCount === 1) {
-            result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null } : t) };
+            result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null } : t), lastActionResult: null };
           } else {
             result.success = false;
           }
         } else {
           const primary = prevState.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
           if (primary) result = applyMergeSurgical(prevState, primary.id, tileId, '#fff', newGroupId);
-          else result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t) };
+          else result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t), lastActionResult: null };
         }
         break;
       }
@@ -174,30 +178,31 @@ export function useGameLogic(initialRoomCode: string | null) {
         result.next = { 
           ...prevState, 
           userGroups: existing ? prevState.userGroups : [...prevState.userGroups, action.payload.group],
-          tiles: action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id } : t) : prevState.tiles
+          tiles: action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id } : t) : prevState.tiles,
+          lastActionResult: null
         };
         break;
       case 'REFILL_BOARD': {
         const unlocked = prevState.tiles.filter(t => !t.locked && !t.hidden);
         const locked = prevState.tiles.filter(t => t.locked);
-        // NO SHUFFLE: Keep current order but re-assign tracks
         const refilledTiles = [...unlocked, ...locked];
         const tpr = prevState.tilesPerRow;
         result.next = { 
           ...prevState, 
-          tiles: applyGridPhysics(refilledTiles.map((t, i) => ({ ...t, col: i % tpr })), prevState.settings, tpr) 
+          tiles: applyGridPhysics(refilledTiles.map((t, i) => ({ ...t, col: i % tpr })), prevState.settings, tpr),
+          lastActionResult: null
         };
         break;
       }
       case 'SHUFFLE_BOARD': {
         const unlocked = prevState.tiles.filter(t => !t.locked && !t.hidden);
         const locked = prevState.tiles.filter(t => t.locked);
-        // EXPLICIT SHUFFLE
         const shuffledUnlocked = shuffleArray(unlocked);
         const tpr = prevState.tilesPerRow;
         result.next = { 
           ...prevState, 
-          tiles: applyGridPhysics(shuffledUnlocked.concat(locked).map((t, i) => ({ ...t, col: i % tpr, order: i })), prevState.settings, tpr) 
+          tiles: applyGridPhysics(shuffledUnlocked.concat(locked).map((t, i) => ({ ...t, col: i % tpr, order: i })), prevState.settings, tpr),
+          lastActionResult: null
         };
         break;
       }
@@ -208,7 +213,8 @@ export function useGameLogic(initialRoomCode: string | null) {
           ...prevState, 
           tilesPerRow: tpr, 
           autoRefill: action.payload.autoRefill ?? prevState.autoRefill,
-          tiles: applyGridPhysics(updatedTiles, prevState.settings, tpr)
+          tiles: applyGridPhysics(updatedTiles, prevState.settings, tpr),
+          lastActionResult: null
         };
         break;
       }
@@ -222,7 +228,8 @@ export function useGameLogic(initialRoomCode: string | null) {
           playerStats: {
             ...prevState.playerStats,
             [localId]: { ...prevState.playerStats[localId], name: action.payload.name }
-          }
+          },
+          lastActionResult: null
         };
         break;
       case 'REORDER_TILE': {
@@ -234,12 +241,11 @@ export function useGameLogic(initialRoomCode: string | null) {
         if (direction === 'top') {
           nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow, tileId);
         } else {
-          // Manual Bottom: We'll sink it
           nextTiles = nextTiles.map(t => t.id === tileId ? { ...t, hidden: true } : t);
           nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow);
           nextTiles = nextTiles.map(t => t.id === tileId ? { ...t, hidden: false } : t);
         }
-        result.next = { ...prevState, tiles: nextTiles };
+        result.next = { ...prevState, tiles: nextTiles, lastActionResult: null };
         break;
       }
     }
@@ -323,7 +329,15 @@ export function useGameLogic(initialRoomCode: string | null) {
     setState(prev => {
       const result = applyActionToState(action, prev);
       
-      // Atomic Contribution Stats
+      // Multiplayer Optimistic Pass: We MUST clear the old result here too
+      if (prev.roomCode) {
+        return {
+          ...result.next,
+          lastActionResult: null // Clear previous errors during optimistic update
+        };
+      }
+
+      // Local Pass
       if (!prev.roomCode && (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId))) {
         const currentStats = prev.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
         const updatedStats = {

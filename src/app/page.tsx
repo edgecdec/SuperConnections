@@ -55,12 +55,15 @@ function GameContent() {
       return;
     }
 
-    setSelectedTile((prev) => {
-      if (prev && prev.id === tile.id) return null;
-      if (prev) { game.merge(tile.id, prev.id); return null; }
-      return tile;
-    });
-  }, [game, setSelectedTile]);
+    if (selectedTile && selectedTile.id === tile.id) {
+      setSelectedTile(null);
+    } else if (selectedTile) {
+      game.merge(tile.id, selectedTile.id);
+      setSelectedTile(null);
+    } else {
+      setSelectedTile(tile);
+    }
+  }, [game, selectedTile, setSelectedTile]);
 
   const onTileAuxClick = useCallback((e: React.MouseEvent, tile: Tile) => {
     if (tile.locked) return;
