@@ -42,8 +42,11 @@ export const TileComponent = React.memo(({
   
   let displayText = tile.text;
   if (tile.itemCount > 1) {
-    if (group) {
+    if (group && tile.isMaster) {
       displayText = getGroupDisplayName(group.name, tooltipText);
+    } else if (group) {
+      // Non-master merged tiles are usually hidden, but just in case:
+      displayText = "";
     } else {
       const items = tile.text.split(', ').map(s => s.trim());
       displayText = items.length <= 2 ? items.join(', ') : `${items.slice(0, 2).join(', ')}...`;
@@ -91,7 +94,7 @@ export const TileComponent = React.memo(({
         <Typography variant="body2" fontWeight="bold" sx={{ pointerEvents: 'none' }}>
           {displayText}
         </Typography>
-        {tile.itemCount > 1 && (
+        {tile.itemCount > 1 && tile.isMaster && (
           <Typography variant="caption" sx={{ position: 'absolute', bottom: 2, right: 4, fontWeight: 'bold', fontSize: '0.7em', color: group ? '#333' : '#666', pointerEvents: 'none' }}>
             [{tile.itemCount}]
           </Typography>
@@ -118,6 +121,7 @@ export const TileComponent = React.memo(({
          prev.tile.itemCount === next.tile.itemCount &&
          prev.tile.locked === next.tile.locked &&
          prev.tile.hidden === next.tile.hidden &&
+         prev.tile.isMaster === next.tile.isMaster &&
          prev.tile.durableKey === next.tile.durableKey &&
          prev.group?.color === next.group?.color &&
          prev.gridColumn === next.gridColumn &&

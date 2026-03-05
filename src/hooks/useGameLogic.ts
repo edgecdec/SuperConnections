@@ -90,7 +90,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       let newUserGroups = [...prevState.userGroups];
       const existingGroupIndex = newUserGroups.findIndex(g => g.id === targetId);
 
-      // Extract words from the merged tile
+      // Extract words from the merged tile (which itself could be a master)
       const mergedWords = merged.userGroupId ? 
         (prevState.userGroups.find(g => g.id === merged.userGroupId)?.words || [merged.text]) : 
         [merged.text];
@@ -117,7 +117,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       const mOldId = merged.userGroupId;
 
       let nextTiles = prevState.tiles.map(t => {
-        if (t.id === mergedId) return { ...t, hidden: true, userGroupId: targetId };
+        if (t.id === mergedId) return { ...t, hidden: true, userGroupId: targetId, isMaster: false };
         if (t.id === survivorId) {
           return { 
             ...t, 
@@ -130,7 +130,7 @@ export function useGameLogic(initialRoomCode: string | null) {
         return t;
       });
 
-      // Apply STABLE Grid Physics
+      // Apply STABLE Grid Physics (PR Durable Key Logic)
       nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow, survivorId);
 
       return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1, lastActionResult: null }, success: true };
@@ -174,7 +174,7 @@ export function useGameLogic(initialRoomCode: string | null) {
           const currentGroupId = tile?.userGroupId;
           const groupCount = currentGroupId ? prevState.tiles.reduce((acc, t) => (t.userGroupId === currentGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0) : 0;
           if (tile && tile.itemCount === 1 && groupCount === 1) {
-            result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null } : t), lastActionResult: null };
+            result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: null, isMaster: false } : t), lastActionResult: null };
           } else {
             result.success = false;
           }
@@ -201,7 +201,7 @@ export function useGameLogic(initialRoomCode: string | null) {
         break;
       }
       case 'REFILL_BOARD': {
-        // Compact durable keys upward
+        // PURE PR Logic: Compact durable keys upward
         let act = [...prevState.tiles.filter(t => !t.locked && !t.hidden)];
         let inact = [...prevState.tiles.filter(t => t.locked || t.hidden)];
         act.sort((a, b) => (a.durableKey || 0) - (b.durableKey || 0));
@@ -399,7 +399,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       const targetTile = stateRef.current.tiles.find(t => t.id === targetId);
       if (targetTile?.userGroupId) return null;
       const newId = Math.random().toString(36).substring(2, 9);
-      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: '', color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), words: [], lastUpdated: Date.now() } } });
+      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: '', color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), lastUpdated: Date.now() } } });
       return newId;
     },
     renameGroup: (groupId: string, newName: string) => handleAction({ type: 'RENAME_GROUP', payload: { groupId, newName } }),
@@ -426,18 +426,14 @@ export function useGameLogic(initialRoomCode: string | null) {
         let selectedNames: string[] = [];
         if (manualCategories.length > 0) { selectedNames = manualCategories.filter(name => categoriesData[name]); }
         
-        const shuffledPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
-        const usedItems = new Set<string>();
-        
-        selectedNames.forEach(name => {
-          const items = categoriesData[name].items;
-          items.slice(0, itemsPerCategory).forEach(i => usedItems.add(i.toLowerCase()));
-        });
+        const remainingNeeded = numCategories - selectedNames.length;
+        if (remainingNeeded > 0) {
+          const shuffledPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
+          selectedNames = [...selectedNames, ...shuffledPool.slice(0, remainingNeeded)];
+        }
 
-        const finalSelectedNames = [...selectedNames];
-        for (const catName of shuffledPool) {
-          if (finalSelectedNames.length >= numCategories) break;
-          
+        const usedItems = new Set<string>();
+        selectedNames.forEach(catName => {
           const cat = categoriesData[catName];
           let itemsPool = [...cat.items];
           if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
@@ -447,32 +443,14 @@ export function useGameLogic(initialRoomCode: string | null) {
           for (const item of itemsPool) {
             if (addedItems.length >= itemsPerCategory) break;
             if (!usedItems.has(item.toLowerCase())) {
+              usedItems.add(item.toLowerCase());
               addedItems.push(item);
             }
           }
 
           if (addedItems.length === itemsPerCategory) {
-            addedItems.forEach(i => usedItems.add(i.toLowerCase()));
-            finalSelectedNames.push(catName);
             selectedCatsInfo.push({ name: catName, items: addedItems });
           }
-        }
-        
-        selectedNames.forEach(catName => {
-           if (selectedCatsInfo.find(c => c.name === catName)) return;
-           const cat = categoriesData[catName];
-           let itemsPool = [...cat.items];
-           if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
-           else if (difficulty === 'hard') itemsPool = [...itemsPool].reverse();
-           
-           let addedItems: string[] = [];
-           for (const item of itemsPool) {
-             if (addedItems.length >= itemsPerCategory) break;
-             addedItems.push(item);
-           }
-           if (addedItems.length > 0) {
-             selectedCatsInfo.push({ name: catName, items: addedItems });
-           }
         });
       }
 
@@ -488,25 +466,17 @@ export function useGameLogic(initialRoomCode: string | null) {
             itemCount: 1, 
             col: colIdx,
             order: (colIdx * itemsPerCategory) + rowIdx,
-            durableKey: (colIdx * itemsPerCategory) + rowIdx
+            durableKey: (colIdx * itemsPerCategory) + rowIdx,
+            isMaster: false
           });
         });
       });
 
-      // TRUE RANDOMIZATION: Shuffle all items FIRST
-      const shuffledTiles = shuffleArray(initialTiles);
-      
-      // Then assign them to columns sequentially based on their random position
-      // AND assign a permanent 'durableKey' based on this shuffle.
-      const positionedTiles = shuffledTiles.map((tile, idx) => ({
-        ...tile,
-        durableKey: idx,
-        col: idx % numCategories,
-        order: idx
-      }));
+      // PURE PR Logic: Shuffle and re-assign sequential durableKeys up to N
+      let shuffledTiles = shuffleArray(initialTiles);
+      shuffledTiles = shuffledTiles.map((t, idx) => ({ ...t, durableKey: idx }));
 
-      // Apply initial physics to group them correctly
-      const finalTiles = applyGridPhysics(positionedTiles, settings, numCategories);
+      const finalTiles = applyGridPhysics(shuffledTiles, settings, numCategories);
 
       const newState: GameState = { 
         roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 

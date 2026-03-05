@@ -100,7 +100,16 @@ export const GameGrid = React.memo(({
         )}
       </Box>
       <Box sx={{ flexGrow: 1, overflowX: 'auto', pb: 2 }}>
-        <Box display="grid" gap={1} gridTemplateColumns={`repeat(${tilesPerRow}, minmax(100px, 1fr))`} sx={{ minWidth: 'min-content' }}>
+        <Box 
+          display="grid" 
+          gap={1} 
+          gridTemplateColumns={`repeat(${tilesPerRow}, minmax(100px, 1fr))`} 
+          sx={{ 
+            minWidth: 'min-content',
+            // Ensure implicit rows take up at least enough space for tiles
+            gridAutoRows: 'minmax(80px, auto)' 
+          }}
+        >
           {activeTiles.map((tile) => {
             const isSelected = !!(selectedTile && selectedTile.id === tile.id);
             const isError = !!(actionFailed && involvedTileIds.includes(tile.id));
@@ -131,12 +140,30 @@ export const GameGrid = React.memo(({
               />
             );
           })}
-          {completedCategories.map(cat => (
-            <Paper key={cat} sx={{ gridColumn: '1 / -1', p: 2, mt: 1, backgroundColor: '#d4edda', textAlign: 'center', border: '2px solid #2e7d32' }}>
-              <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>{cat}</Typography>
-              <Typography variant="body2">{solvedItemMap[cat]}</Typography>
-            </Paper>
-          ))}
+          {completedCategories.map((cat, idx) => {
+            // Place completed categories at the bottom
+            // We calculate an approximate offset row based on max possible active rows
+            const maxActiveRows = Math.ceil(numCategories * gridSize / tilesPerRow) + 2;
+            const rowPos = maxActiveRows + idx;
+
+            return (
+              <Paper 
+                key={cat} 
+                sx={{ 
+                  gridColumn: '1 / -1', 
+                  gridRow: rowPos,
+                  p: 2, 
+                  mt: 1, 
+                  backgroundColor: '#d4edda', 
+                  textAlign: 'center', 
+                  border: '2px solid #2e7d32' 
+                }}
+              >
+                <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>{cat}</Typography>
+                <Typography variant="body2">{solvedItemMap[cat]}</Typography>
+              </Paper>
+            );
+          })}
         </Box>
       </Box>
     </Box>

@@ -204,6 +204,7 @@ app.prepare().then(() => {
 
             merged.hidden = true;
             merged.userGroupId = targetId;
+            merged.isMaster = false;
 
             state.tiles.forEach(t => {
                 if (t.id === survivorId || t.id === mergedId) return;
@@ -279,7 +280,10 @@ app.prepare().then(() => {
                         const currentGroupId = tile.userGroupId;
                         const groupCount = currentGroupId ? state.tiles.reduce((acc, t) => (t.userGroupId === currentGroupId && !t.hidden && !t.locked) ? acc + t.itemCount : acc, 0) : 0;
                         if (tile.itemCount === 1 && groupCount === 1) {
-                            tile.userGroupId = null; stateChanged = true; actionResult = { success: true, actionType: action.type };
+                            tile.userGroupId = null; 
+                            tile.isMaster = false;
+                            stateChanged = true; 
+                            actionResult = { success: true, actionType: action.type };
                         } else { actionResult = { success: false, actionType: action.type }; }
                     } else {
                         const primary = state.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
@@ -301,9 +305,9 @@ app.prepare().then(() => {
                 if (tileId) { 
                     const t = state.tiles.find(tile => tile.id === tileId); 
                     if (t) {
+                        newGroup.words = t.userGroupId ? (state.userGroups.find(g => g.id === t.userGroupId)?.words || [t.text]) : [t.text];
                         t.userGroupId = group.id; 
                         t.isMaster = true;
-                        newGroup.words = t.userGroupId ? (state.userGroups.find(g => g.id === t.userGroupId)?.words || [t.text]) : [t.text];
                     }
                 }
                 if (!state.userGroups.find(g => g.id === group.id)) state.userGroups.push(newGroup);
@@ -358,9 +362,11 @@ app.prepare().then(() => {
                     if (direction === 'top') {
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow, tileId);
                     } else {
+                        const wasHidden = tile.hidden;
                         tile.hidden = true;
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
-                        tile.hidden = false;
+                        const sunkenTile = state.tiles.find(t => t.id === tileId);
+                        if (sunkenTile) sunkenTile.hidden = wasHidden;
                     }
                     stateChanged = true;
                     actionResult = { success: true, actionType: action.type };
@@ -392,7 +398,7 @@ app.prepare().then(() => {
                 const firstCategory = groupTiles[0].realCategory;
                 if (groupTiles.every(t => t.realCategory === firstCategory) && !state.completedCategories.includes(firstCategory)) {
                     state.completedCategories.push(firstCategory);
-                    state.tiles.forEach(t => { if (t.userGroupId === gid) { t.locked = true; t.userGroupId = null; } });
+                    state.tiles.forEach(t => { if (t.userGroupId === gid) { t.locked = true; t.userGroupId = null; t.isMaster = false; } });
                 }
             }
         });
