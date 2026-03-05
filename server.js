@@ -22,7 +22,7 @@ const parseCookie = (str, name) => {
     return match ? match[2] : null;
 };
 
-// SHARED PHYSICS LOGIC (Mirror of src/utils/physics.js)
+// SHARED PHYSICS LOGIC (Mirror of src/utils/physics.ts)
 function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
   if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
     return tiles;
@@ -32,29 +32,36 @@ function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
   const colBuckets = Array.from({ length: numCols }, () => []);
 
   tiles.forEach(tile => {
-    const col = (tile.col !== undefined) ? tile.col : (tiles.indexOf(tile) % numCols);
+    const col = (tile.col !== undefined) ? tile.col : 0;
     if (colBuckets[col]) colBuckets[col].push(tile);
   });
 
   colBuckets.forEach(bucket => {
     if (bucket.length === 0) return;
     const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hidden = bucket.filter(t => t.hidden || t.locked);
+    const hiddenOrLocked = bucket.filter(t => t.hidden || t.locked);
     const survivor = bucket.find(t => t.id === survivorId);
 
     bucket.length = 0;
-    if (survivor && settings.popToTop) bucket.push(survivor);
-    else if (survivor) active.unshift(survivor);
+    if (survivor && settings.popToTop) {
+      bucket.push(survivor);
+    } else if (survivor) {
+      active.unshift(survivor);
+    }
 
-    if (settings.gravity === 'up') bucket.push(...active, ...hidden);
-    else bucket.push(...active, ...hidden);
+    if (settings.gravity === 'up') {
+      bucket.push(...active, ...hiddenOrLocked);
+    } else {
+      bucket.push(...active, ...hiddenOrLocked);
+    }
   });
 
   const flattened = [];
   const maxRows = Math.max(...colBuckets.map(b => b.length));
   for (let r = 0; r < maxRows; r++) {
     for (let c = 0; c < numCols; c++) {
-      if (colBuckets[c][r]) flattened.push(colBuckets[c][r]);
+      const tile = colBuckets[c][r];
+      if (tile) flattened.push(tile);
     }
   }
   return flattened;
@@ -120,6 +127,10 @@ app.prepare().then(() => {
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
+           if (rooms[roomCode].state) {
+               rooms[roomCode].state.startTime = rooms[roomCode].state.startTime || Date.now();
+               rooms[roomCode].state.playerStats = rooms[roomCode].state.playerStats || {};
+           }
            console.log(`Room ${roomCode} created by host ${userId}`);
        } else if (rooms[roomCode].cleanupTimer) {
            clearTimeout(rooms[roomCode].cleanupTimer);
@@ -170,7 +181,7 @@ app.prepare().then(() => {
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
-            survivor.text = Array.from(new Set([...survivor.text.split(', '), ...merged.text.split(', ')])).join(', ');
+            survivor.text = Array.from(new Set([...survivor.text.split(', ').map(s => s.trim()), ...merged.text.split(', ').map(s => s.trim())])).join(', ');
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
 
@@ -301,10 +312,11 @@ app.prepare().then(() => {
                     if (direction === 'top') {
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow, tileId);
                     } else {
-                        // Sink to bottom
+                        // Sink to bottom: Temporarily mark as hidden to force physics to push it down
+                        const wasHidden = tile.hidden;
                         tile.hidden = true;
                         state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
-                        tile.hidden = false;
+                        tile.hidden = wasHidden;
                     }
                     stateChanged = true;
                     actionResult = { success: true, actionType: action.type };
@@ -323,6 +335,7 @@ app.prepare().then(() => {
             }
         }
 
+        // Handle auto-completion
         const groupCounts = state.tiles.reduce((acc, tile) => {
             if (tile.userGroupId && !tile.locked && !tile.hidden) acc[tile.userGroupId] = (acc[tile.userGroupId] || 0) + tile.itemCount;
             return acc;

@@ -13,10 +13,9 @@ export function applyGridPhysics(tiles: any[], settings: any, tilesPerRow: numbe
   const colBuckets = Array.from({ length: numCols }, () => [] as any[]);
 
   // 1. Sort tiles into their permanent vertical tracks
+  // We use tile.col which MUST be assigned during board generation.
   tiles.forEach(tile => {
-    // If a tile doesn't have a column yet (e.g. from an old save), 
-    // we assign one based on its current index to prevent crashes.
-    const col = (tile.col !== undefined) ? tile.col : (tiles.indexOf(tile) % numCols);
+    const col = (tile.col !== undefined) ? tile.col : 0;
     if (colBuckets[col]) {
       colBuckets[col].push(tile);
     }
@@ -26,34 +25,46 @@ export function applyGridPhysics(tiles: any[], settings: any, tilesPerRow: numbe
   colBuckets.forEach(bucket => {
     if (bucket.length === 0) return;
 
-    // Separate the bucket into states
+    // Filter into three pools to maintain relative order of active tiles
     const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
-    const hidden = bucket.filter(t => t.hidden || t.locked);
+    const hiddenOrLocked = bucket.filter(t => t.hidden || t.locked);
     const survivor = bucket.find(t => t.id === survivorId);
 
-    // Rebuild the column: [Survivor (if exists)] -> [Active Tiles] -> [Hidden/Locked Tiles]
+    // Rebuild the column:
+    // [Survivor] (if popped to top)
+    // [Active Tiles] (in their previous relative order)
+    // [Hidden/Locked Tiles] (sunk to the bottom)
+    
     bucket.length = 0;
+    
     if (survivor && settings.popToTop) {
       bucket.push(survivor);
     } else if (survivor) {
+      // If survivor shouldn't pop, keep it at the top of active pool
       active.unshift(survivor);
     }
 
     if (settings.gravity === 'up') {
-      bucket.push(...active, ...hidden);
+      bucket.push(...active, ...hiddenOrLocked);
     } else {
-      bucket.push(...active, ...hidden);
+      // If no gravity, we should technically keep original positions, 
+      // but "Pop to Top" already forced a reorder. 
+      // For consistency, we maintain the active -> hidden split.
+      bucket.push(...active, ...hiddenOrLocked);
     }
   });
 
   // 3. Re-flatten the columns back into a row-major 1D array for rendering
+  // Row 0: [C0, C1, C2...]
+  // Row 1: [C0, C1, C2...]
   const flattened: any[] = [];
   const maxRows = Math.max(...colBuckets.map(b => b.length));
 
   for (let r = 0; r < maxRows; r++) {
     for (let c = 0; c < numCols; c++) {
-      if (colBuckets[c][r]) {
-        flattened.push(colBuckets[c][r]);
+      const tile = colBuckets[c][r];
+      if (tile) {
+        flattened.push(tile);
       }
     }
   }
