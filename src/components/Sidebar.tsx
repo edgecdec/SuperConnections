@@ -40,6 +40,7 @@ interface SidebarProps {
   isHost: boolean;
   onUpdateSettings: (settings: { tilesPerRow?: number; autoRefill?: boolean }) => void;
   onRefillBoard: () => void;
+  onShuffleBoard: () => void;
   onQuitGame: () => void;
   onCreateNewGroup: () => void;
   onOpenRenameDialog: (groupId: string, name: string) => void;
@@ -74,6 +75,7 @@ export const Sidebar = React.memo(({
   isHost,
   onUpdateSettings,
   onRefillBoard,
+  onShuffleBoard,
   onQuitGame,
   onCreateNewGroup,
   onOpenRenameDialog,
@@ -198,15 +200,24 @@ export const Sidebar = React.memo(({
               }
               label="Auto-Refill Rows"
             />
-            <Button 
-              variant="outlined" 
-              size="small" 
-              fullWidth 
-              sx={{ mt: 1 }}
-              onClick={onRefillBoard}
-            >
-              Refill Board
-            </Button>
+            <Box display="flex" flexDirection="column" gap={1} mt={1}>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                fullWidth 
+                onClick={onRefillBoard}
+              >
+                Clean Grid (Preserve Order)
+              </Button>
+              <Button 
+                variant="outlined" 
+                size="small" 
+                fullWidth 
+                onClick={onShuffleBoard}
+              >
+                Shuffle Board (Randomize)
+              </Button>
+            </Box>
             {isHost && (
               <Button 
                 variant="contained" 

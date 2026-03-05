@@ -75,6 +75,7 @@ export type GameAction =
   | { type: 'TAG_TILE'; payload: { tileId: string; groupId: string | null; newGroupId?: string } }
   | { type: 'CREATE_GROUP'; payload: { tileId: string | null; group: UserGroup } }
   | { type: 'REFILL_BOARD'; payload?: never }
+  | { type: 'SHUFFLE_BOARD'; payload?: never }
   | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } }
   | { type: 'CLEAR_RESULT'; payload?: never }
   | { type: 'SET_PLAYER_NAME'; payload: { name: string } }

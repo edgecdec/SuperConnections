@@ -180,16 +180,24 @@ export function useGameLogic(initialRoomCode: string | null) {
       case 'REFILL_BOARD': {
         const unlocked = prevState.tiles.filter(t => !t.locked && !t.hidden);
         const locked = prevState.tiles.filter(t => t.locked);
-        // Shuffle active items
-        const shuffledUnlocked = shuffleArray(unlocked);
+        // NO SHUFFLE: Keep current order but re-assign tracks
+        const refilledTiles = [...unlocked, ...locked];
         const tpr = prevState.tilesPerRow;
-        
-        // Re-assign columns AND order based on new shuffled order
-        const refilledTiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr, order: i }));
-        
         result.next = { 
           ...prevState, 
-          tiles: applyGridPhysics(refilledTiles, prevState.settings, tpr) 
+          tiles: applyGridPhysics(refilledTiles.map((t, i) => ({ ...t, col: i % tpr })), prevState.settings, tpr) 
+        };
+        break;
+      }
+      case 'SHUFFLE_BOARD': {
+        const unlocked = prevState.tiles.filter(t => !t.locked && !t.hidden);
+        const locked = prevState.tiles.filter(t => t.locked);
+        // EXPLICIT SHUFFLE
+        const shuffledUnlocked = shuffleArray(unlocked);
+        const tpr = prevState.tilesPerRow;
+        result.next = { 
+          ...prevState, 
+          tiles: applyGridPhysics(shuffledUnlocked.concat(locked).map((t, i) => ({ ...t, col: i % tpr, order: i })), prevState.settings, tpr) 
         };
         break;
       }
@@ -363,6 +371,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     renameGroup: (groupId: string, newName: string) => handleAction({ type: 'RENAME_GROUP', payload: { groupId, newName } }),
     updateSettings: (s: any) => handleAction({ type: 'UPDATE_SETTINGS', payload: s }),
     refill: () => handleAction({ type: 'REFILL_BOARD' }),
+    shuffle: () => handleAction({ type: 'SHUFFLE_BOARD' }),
     setPlayerName: (name: string) => handleAction({ type: 'SET_PLAYER_NAME', payload: { name } }),
     reorder: (tileId: string, direction: 'top' | 'bottom') => handleAction({ type: 'REORDER_TILE', payload: { tileId, direction } }),
     start: (multi: boolean, settings: GameSettings) => {

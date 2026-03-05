@@ -136,7 +136,7 @@ function GameContent() {
       <Sidebar 
         {...state} sidebarExpanded={sidebarExpanded} setSidebarExpanded={setSidebarExpanded} settingsExpanded={settingsExpanded}
         setSettingsExpanded={setSettingsExpanded} groupStats={groupStats} isHost={isHost}
-        onUpdateSettings={game.updateSettings} onRefillBoard={game.refill} onQuitGame={game.quit}
+        onUpdateSettings={game.updateSettings} onRefillBoard={game.refill} onShuffleBoard={game.shuffle} onQuitGame={game.quit}
         onCreateNewGroup={() => {
           const newId = game.createGroup();
           if (newId) {

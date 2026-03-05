@@ -282,9 +282,19 @@ app.prepare().then(() => {
             case 'REFILL_BOARD': {
                 const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
                 const locked = state.tiles.filter(t => t.locked);
+                const refilledTiles = [...unlocked, ...locked];
+                const tpr = state.tilesPerRow;
+                state.tiles = refilledTiles.map((t, i) => ({ ...t, col: i % tpr }));
+                state.tiles = applyGridPhysics(state.tiles, state.settings, tpr);
+                stateChanged = true;
+                actionResult = { success: true, actionType: action.type };
+                break;
+            }
+            case 'SHUFFLE_BOARD': {
+                const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
+                const locked = state.tiles.filter(t => t.locked);
                 const shuffledUnlocked = shuffleArray(unlocked);
                 const tpr = state.tilesPerRow;
-                // Re-assign order and col
                 state.tiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr, order: i }));
                 state.tiles = applyGridPhysics(state.tiles, state.settings, tpr);
                 stateChanged = true;
