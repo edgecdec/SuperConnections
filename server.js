@@ -285,13 +285,18 @@ app.prepare().then(() => {
             case 'REFILL_BOARD': {
                 const unlocked = state.tiles.filter(t => !t.locked && !t.hidden);
                 const locked = state.tiles.filter(t => t.locked);
-                state.tiles = [...unlocked, ...locked];
+                const refilledTiles = [...unlocked, ...locked];
+                const tpr = state.tilesPerRow;
+                state.tiles = refilledTiles.map((t, i) => ({ ...t, col: i % tpr }));
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;
             }
             case 'UPDATE_SETTINGS': {
-                if (action.payload.tilesPerRow !== undefined) state.tilesPerRow = action.payload.tilesPerRow;
+                if (action.payload.tilesPerRow !== undefined) {
+                    state.tilesPerRow = action.payload.tilesPerRow;
+                    state.tiles = state.tiles.map((t, i) => ({ ...t, col: i % action.payload.tilesPerRow }));
+                }
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };

@@ -175,12 +175,27 @@ export function useGameLogic(initialRoomCode: string | null) {
           tiles: action.payload.tileId ? prevState.tiles.map(t => t.id === action.payload.tileId ? { ...t, userGroupId: action.payload.group.id } : t) : prevState.tiles
         };
         break;
-      case 'REFILL_BOARD':
-        result.next = { ...prevState, tiles: [...prevState.tiles.filter(t => !t.locked && !t.hidden), ...prevState.tiles.filter(t => t.locked)] };
+      case 'REFILL_BOARD': {
+        const unlocked = prevState.tiles.filter(t => !t.locked && !t.hidden);
+        const locked = prevState.tiles.filter(t => t.locked);
+        const refilledTiles = [...unlocked, ...locked];
+        const tpr = prevState.tilesPerRow;
+        result.next = { 
+          ...prevState, 
+          tiles: refilledTiles.map((t, i) => ({ ...t, col: i % tpr })) 
+        };
         break;
-      case 'UPDATE_SETTINGS':
-        result.next = { ...prevState, tilesPerRow: action.payload.tilesPerRow ?? prevState.tilesPerRow, autoRefill: action.payload.autoRefill ?? prevState.autoRefill };
+      }
+      case 'UPDATE_SETTINGS': {
+        const tpr = action.payload.tilesPerRow ?? prevState.tilesPerRow;
+        result.next = { 
+          ...prevState, 
+          tilesPerRow: tpr, 
+          autoRefill: action.payload.autoRefill ?? prevState.autoRefill,
+          tiles: prevState.tiles.map((t, i) => ({ ...t, col: i % tpr }))
+        };
         break;
+      }
       case 'CLEAR_RESULT':
         result.next = { ...prevState, lastActionResult: null };
         break;
