@@ -178,22 +178,27 @@ export function useGameLogic(initialRoomCode: string | null) {
       case 'REFILL_BOARD': {
         const unlocked = prevState.tiles.filter(t => !t.locked && !t.hidden);
         const locked = prevState.tiles.filter(t => t.locked);
-        // Shuffle unlocked items so they get new random positions on refill
-        const refilledTiles = [...shuffleArray(unlocked), ...locked];
+        // Shuffle active items
+        const shuffledUnlocked = shuffleArray(unlocked);
         const tpr = prevState.tilesPerRow;
+        
+        // Re-assign columns based on new shuffled order
+        const refilledTiles = [...shuffledUnlocked, ...locked].map((t, i) => ({ ...t, col: i % tpr }));
+        
         result.next = { 
           ...prevState, 
-          tiles: refilledTiles.map((t, i) => ({ ...t, col: i % tpr })) 
+          tiles: applyGridPhysics(refilledTiles, prevState.settings, tpr) 
         };
         break;
       }
       case 'UPDATE_SETTINGS': {
         const tpr = action.payload.tilesPerRow ?? prevState.tilesPerRow;
+        const updatedTiles = prevState.tiles.map((t, i) => ({ ...t, col: i % tpr }));
         result.next = { 
           ...prevState, 
           tilesPerRow: tpr, 
           autoRefill: action.payload.autoRefill ?? prevState.autoRefill,
-          tiles: prevState.tiles.map((t, i) => ({ ...t, col: i % tpr }))
+          tiles: applyGridPhysics(updatedTiles, prevState.settings, tpr)
         };
         break;
       }
@@ -216,7 +221,6 @@ export function useGameLogic(initialRoomCode: string | null) {
         const tileIdx = nextTiles.findIndex(t => t.id === tileId);
         if (tileIdx === -1) break;
 
-        const tile = nextTiles[tileIdx];
         if (direction === 'top') {
           nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow, tileId);
         } else {
@@ -290,7 +294,7 @@ export function useGameLogic(initialRoomCode: string | null) {
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
     
-    // CAPTURE SCROLL & BLUR
+    // CAPTURE SCROLL
     if (typeof document !== 'undefined') {
       const grid = document.querySelector('.game-grid-scroll-container');
       if (grid) scrollPosRef.current = grid.scrollTop;
@@ -362,6 +366,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     start: (multi: boolean, settings: GameSettings) => {
       const { numCategories, itemsPerCategory, difficulty, includeNiche, activeTags, manualCategories, customCategories } = settings;
       let selectedCatsInfo: { name: string, items: string[] }[] = [];
+
       if (customCategories && customCategories.length > 0) {
         selectedCatsInfo = customCategories.map(c => ({ name: c.name, items: c.items.slice(0, itemsPerCategory) })).slice(0, numCategories);
       } else {
@@ -372,42 +377,84 @@ export function useGameLogic(initialRoomCode: string | null) {
           if (activeTags.length > 0 && !cat.tags.some(tag => activeTags.includes(tag))) return false;
           return true;
         });
+
         let selectedNames: string[] = [];
         if (manualCategories.length > 0) { selectedNames = manualCategories.filter(name => categoriesData[name]); }
-        const remainingNeeded = numCategories - selectedNames.length;
-        if (remainingNeeded > 0) {
-          const randomPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
-          selectedNames = [...selectedNames, ...randomPool.slice(0, remainingNeeded)];
-        }
+        
+        const shuffledPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
         const usedItems = new Set<string>();
-        selectedNames.forEach(catName => {
+        
+        selectedNames.forEach(name => {
+          const items = categoriesData[name].items;
+          items.slice(0, itemsPerCategory).forEach(i => usedItems.add(i.toLowerCase()));
+        });
+
+        const finalSelectedNames = [...selectedNames];
+        for (const catName of shuffledPool) {
+          if (finalSelectedNames.length >= numCategories) break;
+          
           const cat = categoriesData[catName];
           let itemsPool = [...cat.items];
           if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
           else if (difficulty === 'hard') itemsPool = [...itemsPool].reverse();
+
           let addedItems: string[] = [];
           for (const item of itemsPool) {
             if (addedItems.length >= itemsPerCategory) break;
-            if (!usedItems.has(item.toLowerCase())) { usedItems.add(item.toLowerCase()); addedItems.push(item); }
+            if (!usedItems.has(item.toLowerCase())) {
+              addedItems.push(item);
+            }
           }
-          if (addedItems.length === itemsPerCategory) { selectedCatsInfo.push({ name: catName, items: addedItems }); }
+
+          if (addedItems.length === itemsPerCategory) {
+            addedItems.forEach(i => usedItems.add(i.toLowerCase()));
+            finalSelectedNames.push(catName);
+            selectedCatsInfo.push({ name: catName, items: addedItems });
+          }
+        }
+        
+        selectedNames.forEach(catName => {
+           if (selectedCatsInfo.find(c => c.name === catName)) return;
+           const cat = categoriesData[catName];
+           let itemsPool = [...cat.items];
+           if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
+           else if (difficulty === 'hard') itemsPool = [...itemsPool].reverse();
+           
+           let addedItems: string[] = [];
+           for (const item of itemsPool) {
+             if (addedItems.length >= itemsPerCategory) break;
+             addedItems.push(item);
+           }
+           if (addedItems.length > 0) {
+             selectedCatsInfo.push({ name: catName, items: addedItems });
+           }
         });
       }
 
       let initialTiles: Tile[] = [];
-      selectedCatsInfo.forEach((cat, colIdx) => {
+      selectedCatsInfo.forEach((cat) => {
         cat.items.forEach(item => {
-          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1, col: colIdx });
+          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1, col: 0 });
         });
       });
 
-      initialTiles = applyGridPhysics(shuffleArray(initialTiles), settings, numCategories);
+      // TRUE RANDOMIZATION: Shuffle all items FIRST
+      const shuffledTiles = shuffleArray(initialTiles);
+      
+      // Then assign them to columns sequentially based on their random position
+      const positionedTiles = shuffledTiles.map((tile, idx) => ({
+        ...tile,
+        col: idx % numCategories
+      }));
+
+      // Apply initial physics to group them correctly
+      const finalTiles = applyGridPhysics(positionedTiles, settings, numCategories);
 
       const newState: GameState = { 
         roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 
         gridSize: itemsPerCategory, 
         settings, 
-        tiles: initialTiles, 
+        tiles: finalTiles, 
         userGroups: [], 
         completedCategories: [], 
         mistakes: 0, 
@@ -420,13 +467,11 @@ export function useGameLogic(initialRoomCode: string | null) {
       };
 
       if (multi) {
-        const newRoomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-        const newStateWithRoom = { ...newState, roomCode: newRoomCode };
-        stateRef.current = newStateWithRoom;
-        setState(newStateWithRoom);
+        stateRef.current.roomCode = newState.roomCode;
+        setState(newState);
         setIsPlaying(true);
-        handleAction({ type: 'START_GAME', payload: { settings, tiles: initialTiles } });
-        router.push(`/?room=${newRoomCode}`);
+        handleAction({ type: 'START_GAME', payload: { settings, tiles: finalTiles } });
+        router.push(`/?room=${newState.roomCode}`);
       } else {
         setState(newState);
         setIsPlaying(true);
