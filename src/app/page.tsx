@@ -46,14 +46,31 @@ function GameContent() {
     setTaggingDialogOpen(true);
   }, []);
 
-  const onTileClick = useCallback((tile: Tile) => {
+  const onTileClick = useCallback((e: React.MouseEvent, tile: Tile) => {
     if (tile.locked) return;
+
+    if (e.ctrlKey) {
+      // Ctrl + Click -> Bottom
+      game.reorder(tile.id, 'bottom');
+      return;
+    }
+
     setSelectedTile((prev) => {
       if (prev && prev.id === tile.id) return null;
       if (prev) { game.merge(tile.id, prev.id); return null; }
       return tile;
     });
   }, [game, setSelectedTile]);
+
+  const onTileAuxClick = useCallback((e: React.MouseEvent, tile: Tile) => {
+    if (tile.locked) return;
+    if (e.button === 1) {
+      // Middle Click -> Top (Except combined)
+      if (tile.itemCount === 1) {
+        game.reorder(tile.id, 'top');
+      }
+    }
+  }, [game]);
 
   const onDragStart = useCallback((e: React.DragEvent, tile: Tile) => {
     if (tile.locked) return;
@@ -79,17 +96,6 @@ function GameContent() {
       const draggedTile = JSON.parse(draggedTileData) as Tile;
       game.tag(draggedTile.id, groupId);
     } catch (err) { console.error(err); }
-  }, [game]);
-
-  const onTileDoubleClick = useCallback((e: React.MouseEvent, tile: Tile) => {
-    if (tile.locked) return;
-    if (e.ctrlKey) {
-      game.reorder(tile.id, 'bottom');
-    } else {
-      if (tile.itemCount === 1) {
-        game.reorder(tile.id, 'top');
-      }
-    }
   }, [game]);
 
   const onRenameSave = useCallback((newName: string) => {
@@ -123,7 +129,7 @@ function GameContent() {
         completedCategories={state.completedCategories} activeTiles={activeTiles} selectedTile={selectedTile}
         lastActionResult={lastActionResult} groupIdMap={groupIdMap} groupItemMap={groupItemMap} solvedItemMap={solvedItemMap}
         onCopyRoomLink={handleCopyRoomLink} onMenuOpen={onMenuOpen} onTileClick={onTileClick} onDragStart={onDragStart} onDrop={onDrop}
-        onTileDoubleClick={onTileDoubleClick}
+        onTileAuxClick={onTileAuxClick}
         scrollPosRef={scrollPosRef}
       />
 

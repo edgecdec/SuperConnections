@@ -11,11 +11,11 @@ interface TileProps {
   isSelected: boolean;
   isError: boolean;
   onMenuOpen: (e: React.MouseEvent<HTMLButtonElement>, id: string) => void;
-  onTileClick: (tile: Tile) => void;
+  onTileClick: (e: React.MouseEvent, tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
-  onTileDoubleClick: (e: React.MouseEvent, tile: Tile) => void;
+  onTileAuxClick: (e: React.MouseEvent, tile: Tile) => void;
   tooltipText: string;
 }
 
@@ -30,7 +30,7 @@ export const TileComponent = React.memo(({
   onDragStart,
   onDragOver,
   onDrop,
-  onTileDoubleClick,
+  onTileAuxClick,
   tooltipText
 }: TileProps) => {
   // --- PERFORMANCE LOG ---
@@ -50,8 +50,9 @@ export const TileComponent = React.memo(({
     <Tooltip title={tooltipText} arrow placement="top" disableInteractive>
       <Paper
         elevation={isSelected ? 6 : 3}
-        onClick={() => onTileClick(tile)}
-        onDoubleClick={(e) => onTileDoubleClick(e, tile)}
+        onClick={(e) => onTileClick(e, tile)}
+        onAuxClick={(e) => onTileAuxClick(e, tile)}
+        onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
         draggable={!tile.locked}
         onDragStart={(e) => onDragStart(e, tile)}
         onDragOver={onDragOver}

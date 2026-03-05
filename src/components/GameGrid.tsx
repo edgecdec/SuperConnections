@@ -19,10 +19,10 @@ interface GameGridProps {
   solvedItemMap: Record<string, string>;
   onCopyRoomLink: () => void;
   onMenuOpen: (e: React.MouseEvent<HTMLButtonElement>, id: string) => void;
-  onTileClick: (tile: Tile) => void;
+  onTileClick: (e: React.MouseEvent, tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>, targetTile: Tile) => void;
-  onTileDoubleClick: (e: React.MouseEvent, tile: Tile) => void;
+  onTileAuxClick: (e: React.MouseEvent, tile: Tile) => void;
   scrollPosRef: React.RefObject<number>;
 }
 
@@ -44,7 +44,7 @@ export const GameGrid = React.memo(({
   onTileClick,
   onDragStart,
   onDrop,
-  onTileDoubleClick,
+  onTileAuxClick,
   scrollPosRef
 }: GameGridProps) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -134,7 +134,7 @@ export const GameGrid = React.memo(({
                 onDragStart={onDragStart} 
                 onDragOver={handleDragOver} 
                 onDrop={onDrop} 
-                onTileDoubleClick={onTileDoubleClick}
+                onTileAuxClick={onTileAuxClick}
                 tooltipText={tooltipText}
               />;
           })}
