@@ -131,7 +131,7 @@ app.prepare().then(() => {
             if (!existingGroup) {
                 state.userGroups.push({ 
                     id: targetId, 
-                    name: `Group ${state.userGroups.length + 1}`, 
+                    name: '', 
                     color: newGroupColor, 
                     lastUpdated: Date.now() 
                 });

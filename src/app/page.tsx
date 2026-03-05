@@ -121,8 +121,7 @@ function GameContent() {
         onCreateNewGroup={() => {
           const newId = game.createGroup();
           if (newId) {
-            const group = groupIdMap[newId];
-            setGroupToRename(newId); setInitialGroupName(group?.name || 'New Group'); setRenameDialogOpen(true);
+            setGroupToRename(newId); setInitialGroupName(''); setRenameDialogOpen(true);
           }
         }}
         onOpenRenameDialog={(id, name) => { setGroupToRename(id); setInitialGroupName(name); setRenameDialogOpen(true); }}
@@ -155,8 +154,7 @@ function GameContent() {
         onCreateGroup={(tileId) => {
           const newId = game.createGroup(tileId);
           if (newId) {
-            const group = groupIdMap[newId];
-            setGroupToRename(newId); setInitialGroupName(group?.name || 'New Group'); setRenameDialogOpen(true);
+            setGroupToRename(newId); setInitialGroupName(''); setRenameDialogOpen(true);
           }
         }}
         onTagTile={game.tag}
