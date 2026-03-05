@@ -108,12 +108,6 @@ export const GameGrid = React.memo(({
       </Box>
       <Box sx={{ flexGrow: 1, overflowX: 'auto', pb: 2 }}>
         <Box display="grid" gap={1} gridTemplateColumns={`repeat(${tilesPerRow}, minmax(100px, 1fr))`} sx={{ minWidth: 'min-content' }}>
-          {completedCategories.map(cat => (
-            <Paper key={cat} sx={{ gridColumn: '1 / -1', p: 2, mb: 1, backgroundColor: '#d4edda', textAlign: 'center', border: '2px solid #2e7d32' }}>
-              <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>{cat}</Typography>
-              <Typography variant="body2">{solvedItemMap[cat]}</Typography>
-            </Paper>
-          ))}
           {activeTiles.map((tile) => {
             const isSelected = !!(selectedTile && selectedTile.id === tile.id);
             const isError = !!(actionFailed && involvedTileIds.includes(tile.id));
@@ -138,6 +132,12 @@ export const GameGrid = React.memo(({
                 tooltipText={tooltipText}
               />;
           })}
+          {completedCategories.map(cat => (
+            <Paper key={cat} sx={{ gridColumn: '1 / -1', p: 2, mt: 1, backgroundColor: '#d4edda', textAlign: 'center', border: '2px solid #2e7d32' }}>
+              <Typography variant="h6" sx={{ color: '#1b5e20', fontWeight: 'bold' }}>{cat}</Typography>
+              <Typography variant="body2">{solvedItemMap[cat]}</Typography>
+            </Paper>
+          ))}
         </Box>
       </Box>
     </Box>
