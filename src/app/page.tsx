@@ -19,7 +19,7 @@ function GameContent() {
 
   const {
     state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile,
-    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime
+    game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef
   } = useGameLogic(roomCodeFromUrl);
 
   const lastActionResult = state.lastActionResult;
@@ -112,6 +112,7 @@ function GameContent() {
         completedCategories={state.completedCategories} activeTiles={activeTiles} selectedTile={selectedTile}
         lastActionResult={lastActionResult} groupIdMap={groupIdMap} groupItemMap={groupItemMap} solvedItemMap={solvedItemMap}
         onCopyRoomLink={handleCopyRoomLink} onMenuOpen={onMenuOpen} onTileClick={onTileClick} onDragStart={onDragStart} onDrop={onDrop}
+        scrollPosRef={scrollPosRef}
       />
 
       <Sidebar 

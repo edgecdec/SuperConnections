@@ -39,13 +39,27 @@ export function useGameLogic(initialRoomCode: string | null) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoaded, setIsLoaded] = useState(false);
   const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
   
   const isRemoteUpdate = useRef(false);
   const stateRef = useRef(state);
   const selectedTileRef = useRef<Tile | null>(null);
+  const scrollPosRef = useRef(0);
 
   useEffect(() => { stateRef.current = state; }, [state]);
   useEffect(() => { selectedTileRef.current = selectedTile; }, [selectedTile]);
+
+  // Timer Effect (Client-side only)
+  useEffect(() => {
+    if (isPlaying && state.startTime) {
+      const interval = setInterval(() => {
+        setElapsedTime(Math.floor((Date.now() - state.startTime!) / 1000));
+      }, 1000);
+      return () => clearInterval(interval);
+    } else {
+      setElapsedTime(0);
+    }
+  }, [isPlaying, state.startTime]);
 
   const log = (msg: string) => {
     console.log(`[${new Date().toLocaleTimeString()}] [LOGIC] ${msg}`);
@@ -61,10 +75,7 @@ export function useGameLogic(initialRoomCode: string | null) {
 
     if (survivor.realCategory === merged.realCategory) {
       let targetId = survivor.userGroupId || merged.userGroupId || forceGroupId;
-      
-      if (!targetId) {
-        targetId = Math.random().toString(36).substring(2, 9);
-      }
+      if (!targetId) targetId = Math.random().toString(36).substring(2, 9);
 
       let newUserGroups = [...prevState.userGroups];
       const existingGroupIndex = newUserGroups.findIndex(g => g.id === targetId);
@@ -95,11 +106,9 @@ export function useGameLogic(initialRoomCode: string | null) {
         return t;
       });
 
-      // Feature: Pop to Top (of column) & True Column Gravity
+      // True Column Gravity
       if (prevState.settings.popToTop) {
         const columns = prevState.tilesPerRow;
-        
-        // Reconstruct columns
         const gridColumns: Tile[][] = Array.from({ length: columns }, () => []);
         let originalSurvivorColIdx = -1;
 
@@ -109,34 +118,28 @@ export function useGameLogic(initialRoomCode: string | null) {
            gridColumns[colIdx].push(tile);
         });
 
-        // For the column where the survivor is, move it to the front
         if (originalSurvivorColIdx !== -1) {
             const col = gridColumns[originalSurvivorColIdx];
             const sIdx = col.findIndex(t => t.id === survivorId);
             const sTile = col[sIdx];
             col.splice(sIdx, 1);
-            col.unshift(sTile); // Pop to top of this specific column
+            col.unshift(sTile); 
         }
 
-        // Apply true visual gravity: Push hidden (merged/locked) tiles to the absolute bottom of their columns
-        // This ensures the active tiles visually "fall" upwards to fill the gap.
         if (prevState.settings.gravity === 'up') {
            gridColumns.forEach(col => {
                const active = col.filter(t => !t.hidden && !t.locked);
                const hidden = col.filter(t => t.hidden || t.locked);
                col.length = 0;
-               col.push(...active, ...hidden); // Active fall up, hidden sink down
+               col.push(...active, ...hidden);
            });
         }
 
-        // Re-flatten the grid left-to-right, top-to-bottom
         const flattenedTiles: Tile[] = [];
         const numRows = Math.ceil(nextTiles.length / columns);
         for (let row = 0; row < numRows; row++) {
             for (let col = 0; col < columns; col++) {
-                if (gridColumns[col][row]) {
-                    flattenedTiles.push(gridColumns[col][row]);
-                }
+                if (gridColumns[col][row]) flattenedTiles.push(gridColumns[col][row]);
             }
         }
         nextTiles = flattenedTiles;
@@ -149,7 +152,7 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, []);
 
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
-    let result: { next: GameState, success: boolean } = { next: { ...prevState, lastActionResult: null }, success: true };
+    let result: { next: GameState, success: boolean } = { next: prevState, success: true };
     
     switch (action.type) {
       case 'START_GAME':
@@ -167,10 +170,9 @@ export function useGameLogic(initialRoomCode: string | null) {
           playerStats: prevState.playerStats 
         };
         break;
-      case 'MERGE_TILES': {
+      case 'MERGE_TILES':
         result = applyMergeSurgical(prevState, action.payload.tile1Id, action.payload.tile2Id, action.payload.newGroupColor, action.payload.newGroupId);
         break;
-      }
       case 'RENAME_GROUP':
         result.next = { ...prevState, userGroups: prevState.userGroups.map(g => g.id === action.payload.groupId ? { ...g, name: action.payload.newName } : g) };
         break;
@@ -187,11 +189,8 @@ export function useGameLogic(initialRoomCode: string | null) {
           }
         } else {
           const primary = prevState.tiles.find(t => t.userGroupId === groupId && !t.hidden && !t.locked && t.id !== tileId);
-          if (primary) {
-            result = applyMergeSurgical(prevState, primary.id, tileId, '#fff', newGroupId);
-          } else {
-            result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t) };
-          }
+          if (primary) result = applyMergeSurgical(prevState, primary.id, tileId, '#fff', newGroupId);
+          else result.next = { ...prevState, tiles: prevState.tiles.map(t => t.id === tileId ? { ...t, userGroupId: groupId } : t) };
         }
         break;
       }
@@ -213,16 +212,14 @@ export function useGameLogic(initialRoomCode: string | null) {
         result.next = { ...prevState, lastActionResult: null };
         break;
       case 'SET_PLAYER_NAME':
-        if (prevState.playerStats) {
-          const localId = Object.keys(prevState.playerStats).find(id => id === 'local') || 'local';
-          result.next = {
-            ...prevState,
-            playerStats: {
-              ...prevState.playerStats,
-              [localId]: { ...prevState.playerStats[localId], name: action.payload.name }
-            }
-          };
-        }
+        const localId = Object.keys(prevState.playerStats).find(id => id === 'local') || 'local';
+        result.next = {
+          ...prevState,
+          playerStats: {
+            ...prevState.playerStats,
+            [localId]: { ...prevState.playerStats[localId], name: action.payload.name }
+          }
+        };
         break;
     }
 
@@ -254,45 +251,24 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
     }
 
-    // Feedback Payload (REMOVED: Double counting stats here)
-    if (!prevState.roomCode) {
-      let involvedTileIds: string[] | undefined = undefined;
-      if (action.type === 'MERGE_TILES') involvedTileIds = [action.payload.tile1Id, action.payload.tile2Id];
-      else if (action.type === 'TAG_TILE') involvedTileIds = [action.payload.tileId];
-      result.next.lastActionResult = { success: result.success, actionType: action.type, involvedTileIds };
-    }
-
     return result;
   }, [applyMergeSurgical]);
 
-  // --- STABLE CALLBACKS FOR SOCKET (CRITICAL) ---
-
-  const onStateUpdate = useCallback((newState: GameState) => {
-    isRemoteUpdate.current = true;
-    setState(newState);
-    setIsPlaying(true);
-    setTimeout(() => { isRemoteUpdate.current = false; }, 200);
-  }, []);
-
-  const onRemoteAction = useCallback((action: GameAction) => {
-    setState(prev => applyActionToState(action, prev).next);
-  }, [applyActionToState]);
+  // --- STABLE CALLBACKS FOR SOCKET ---
 
   const onActionResult = useCallback((response: ActionResponse) => {
     setState(prev => ({ ...prev, lastActionResult: response }));
     setTimeout(() => setState(prev => ({ ...prev, lastActionResult: null })), 1500);
   }, []);
 
-  const getLatestState = useCallback(() => isPlaying ? stateRef.current : null, [isPlaying]);
-
-  const { dispatchAction, isHost } = useSocket(state.roomCode, onStateUpdate, getLatestState, onRemoteAction, onActionResult);
+  const { dispatchAction, isHost } = useSocket(state.roomCode, ns => { isRemoteUpdate.current = true; setState(ns); setIsPlaying(true); setTimeout(() => { isRemoteUpdate.current = false; }, 200); }, () => isPlaying ? stateRef.current : null, a => setState(prev => applyActionToState(a, prev).next), onActionResult);
 
   const [localTouchedGroupIds, setLocalTouchedGroupIds] = useState<string[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem('superConnectionsLocalTouches');
     if (saved) {
-      try { setLocalTouchedGroupIds(JSON.parse(saved)); } catch (e) { console.error('Failed to load local touches', e); }
+      try { setLocalTouchedGroupIds(JSON.parse(saved)); } catch (e) {}
     }
   }, []);
 
@@ -306,6 +282,13 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
+    
+    // CAPTURE SCROLL
+    if (typeof document !== 'undefined') {
+      const grid = document.querySelector('.game-grid-scroll-container');
+      if (grid) scrollPosRef.current = grid.scrollTop;
+    }
+
     if (action.type === 'TAG_TILE' && action.payload.groupId) trackLocalTouch(action.payload.groupId);
     if (action.type === 'RENAME_GROUP') trackLocalTouch(action.payload.groupId);
     if (action.type === 'CREATE_GROUP') trackLocalTouch(action.payload.group.id);
@@ -319,7 +302,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     setState(prev => {
       const result = applyActionToState(action, prev);
       
-      // Update solo stats and feedback
+      // Atomic Contribution Stats
       if (!prev.roomCode && (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId))) {
         const currentStats = prev.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
         const updatedStats = {
@@ -344,9 +327,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     });
 
     if (!stateRef.current.roomCode) {
-      setTimeout(() => {
-        setState(prev => ({ ...prev, lastActionResult: null }));
-      }, 1500);
+      setTimeout(() => { setState(prev => ({ ...prev, lastActionResult: null })); }, 1500);
     }
 
     if (stateRef.current.roomCode) dispatchAction(action);
@@ -424,12 +405,13 @@ export function useGameLogic(initialRoomCode: string | null) {
       };
 
       if (multi) {
-        // Set room code so handleAction dispatches to server
-        stateRef.current.roomCode = newState.roomCode;
-        setState(newState);
+        const newRoomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+        const newStateWithRoom = { ...newState, roomCode: newRoomCode };
+        stateRef.current = newStateWithRoom;
+        setState(newStateWithRoom);
         setIsPlaying(true);
         handleAction({ type: 'START_GAME', payload: { settings, tiles: initialTiles } });
-        router.push(`/?room=${newState.roomCode}`);
+        router.push(`/?room=${newRoomCode}`);
       } else {
         setState(newState);
         setIsPlaying(true);
@@ -486,12 +468,8 @@ export function useGameLogic(initialRoomCode: string | null) {
   }, [state.completedCategories, state.tiles]);
 
   const activeTiles = useMemo(() => {
-    // We must always return hidden tiles so the grid renders empty placeholders at the bottom,
-    // ensuring the columns stay vertically aligned. We only filter out fully 'locked' (solved) tiles.
     return state.tiles.filter(t => !t.locked);
   }, [state.tiles]);
 
-  const elapsedTime = state.startTime ? Math.floor((Date.now() - state.startTime) / 1000) : 0;
-
-  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime };
+  return { state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef };
 }

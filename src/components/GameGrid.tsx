@@ -22,6 +22,7 @@ interface GameGridProps {
   onTileClick: (tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onDrop: (e: React.DragEvent<HTMLDivElement>, targetTile: Tile) => void;
+  scrollPosRef: React.RefObject<number>;
 }
 
 export const GameGrid = React.memo(({
@@ -41,19 +42,21 @@ export const GameGrid = React.memo(({
   onMenuOpen,
   onTileClick,
   onDragStart,
-  onDrop
+  onDrop,
+  scrollPosRef
 }: GameGridProps) => {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const scrollPosRef = React.useRef(0);
 
   // Capture scroll position before each render pass
   const handleScroll = React.useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    scrollPosRef.current = e.currentTarget.scrollTop;
-  }, []);
+    if (scrollPosRef && 'current' in scrollPosRef) {
+      (scrollPosRef as any).current = e.currentTarget.scrollTop;
+    }
+  }, [scrollPosRef]);
 
   // Restore scroll position after DOM mutations to prevent 'jump to top' on reorder
   React.useLayoutEffect(() => {
-    if (containerRef.current) {
+    if (containerRef.current && scrollPosRef && 'current' in scrollPosRef && scrollPosRef.current !== null) {
       containerRef.current.scrollTop = scrollPosRef.current;
     }
   });
@@ -84,6 +87,7 @@ export const GameGrid = React.memo(({
     <Box 
       ref={containerRef}
       onScroll={handleScroll}
+      className="game-grid-scroll-container"
       flex={3} 
       display="flex" 
       flexDirection="column" 
