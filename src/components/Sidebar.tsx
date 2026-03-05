@@ -21,7 +21,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import TimerIcon from '@mui/icons-material/Timer';
 import PeopleIcon from '@mui/icons-material/People';
-import { UserGroup, PlayerStats } from '../types';
+import { UserGroup, PlayerStats, GameSettings } from '../types';
 import { RenameDialog } from './RenameDialog';
 import { getGroupDisplayName } from '../utils/groupUtils';
 
@@ -48,6 +48,7 @@ interface SidebarProps {
   elapsedTime: number;
   playerStats: Record<string, PlayerStats>;
   onSetPlayerName: (name: string) => void;
+  settings: GameSettings;
 }
 
 const formatTime = (seconds: number) => {
@@ -80,7 +81,8 @@ export const Sidebar = React.memo(({
   onDropOnGroup,
   elapsedTime,
   playerStats,
-  onSetPlayerName
+  onSetPlayerName,
+  settings
 }: SidebarProps) => {
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
@@ -88,8 +90,8 @@ export const Sidebar = React.memo(({
 
   if (!sidebarExpanded) return null;
 
-  const totalPossibleScore = gridSize * (gridSize - 1);
-  const progressPercent = totalPossibleScore > 0 ? Math.round((score / totalPossibleScore) * 100) : 0;
+  const totalPossibleMerges = settings.numCategories * (settings.itemsPerCategory - 1);
+  const progressPercent = totalPossibleMerges > 0 ? Math.round((score / totalPossibleMerges) * 100) : 0;
 
   return (
     <Paper sx={{ flex: 1, minWidth: '300px', maxWidth: '350px', p: 2, display: 'flex', flexDirection: 'column', position: 'relative', overflowY: 'auto' }}>
@@ -115,7 +117,7 @@ export const Sidebar = React.memo(({
       <Typography variant="body1">Score: {score}</Typography>
       <Typography variant="body1">Mistakes: {mistakes}</Typography>
       <Typography variant="body1">
-        Completed: {completedCategories.length} / {gridSize}
+        Completed: {completedCategories.length} / {settings.numCategories}
       </Typography>
     
       <Divider sx={{ my: 2 }} />

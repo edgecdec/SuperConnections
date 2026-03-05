@@ -138,7 +138,12 @@ function GameContent() {
             <Box display="flex" gap={2}>
               <Typography variant="body2">Score: {state.score}</Typography>
               <Typography variant="body2" color="error">Mistakes: {state.mistakes}</Typography>
-              <Typography variant="body2">Progress: {Math.round((state.score / (state.gridSize * (state.gridSize - 1))) * 100)}%</Typography>
+              <Typography variant="body2">
+                Progress: {(() => {
+                  const total = state.settings.numCategories * (state.settings.itemsPerCategory - 1);
+                  return total > 0 ? Math.round((state.score / total) * 100) : 0;
+                })()}%
+              </Typography>
             </Box>
             <IconButton size="small" onClick={() => setSidebarExpanded(true)}><MenuIcon /></IconButton>
           </Paper>
