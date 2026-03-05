@@ -4,6 +4,7 @@ import { Tile, UserGroup, GameState, GameAction, ActionResponse, CategoryMap, Ga
 import { useSocket } from './useSocket';
 import { getRandomColor } from '../utils/colors';
 import categoriesDataRaw from '../data/categories.json';
+import { applyGridPhysics } from '../utils/physics';
 
 const categoriesData = categoriesDataRaw as CategoryMap;
 
@@ -74,44 +75,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     console.log(`[${new Date().toLocaleTimeString()}] [LOGIC] ${msg}`);
   };
 
-  // --- STABLE PHYSICS ENGINE ---
-
-  const applyPhysicsToTiles = useCallback((tiles: Tile[], settings: GameSettings, survivorId: string | null = null) => {
-    if (!settings.popToTop && settings.gravity !== 'up') return tiles;
-
-    const categories = Array.from(new Set(tiles.map(t => t.realCategory)));
-    const catColumns: Record<string, Tile[]> = {};
-    categories.forEach(cat => { catColumns[cat] = []; });
-    
-    tiles.forEach(tile => { catColumns[tile.realCategory].push(tile); });
-
-    categories.forEach(cat => {
-        const col = catColumns[cat];
-        if (survivorId) {
-          const sIdx = col.findIndex(t => t.id === survivorId);
-          if (sIdx !== -1) {
-              const sTile = col[sIdx];
-              col.splice(sIdx, 1);
-              col.unshift(sTile); 
-          }
-        }
-        if (settings.gravity === 'up') {
-            const active = col.filter(t => !t.hidden && !t.locked);
-            const hidden = col.filter(t => t.hidden || t.locked);
-            col.length = 0;
-            col.push(...active, ...hidden);
-        }
-    });
-
-    const flattenedTiles: Tile[] = [];
-    const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
-    for (let r = 0; r < maxRowItems; r++) {
-        categories.forEach(cat => {
-            if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
-        });
-    }
-    return flattenedTiles;
-  }, []);
+  // --- ATOMIC SURGICAL ENGINE ---
 
   const applyMergeSurgical = useCallback((prevState: GameState, survivorId: string, mergedId: string, newGroupColor: string, forceGroupId?: string): { next: GameState, success: boolean } => {
     const survivor = prevState.tiles.find(t => t.id === survivorId);
@@ -151,13 +115,14 @@ export function useGameLogic(initialRoomCode: string | null) {
         return t;
       });
 
-      nextTiles = applyPhysicsToTiles(nextTiles, prevState.settings, survivorId);
+      // Apply STABLE Grid Physics
+      nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow, survivorId);
 
       return { next: { ...prevState, tiles: nextTiles, userGroups: newUserGroups, score: prevState.score + 1 }, success: true };
     } else {
       return { next: { ...prevState, mistakes: prevState.mistakes + 1 }, success: false };
     }
-  }, [applyPhysicsToTiles]);
+  }, []);
 
   const applyActionToState = useCallback((action: GameAction, prevState: GameState): { next: GameState, success: boolean } => {
     let result: { next: GameState, success: boolean } = { next: prevState, success: true };
@@ -231,44 +196,27 @@ export function useGameLogic(initialRoomCode: string | null) {
         break;
       case 'REORDER_TILE': {
         const { tileId, direction } = action.payload;
-        const tile = prevState.tiles.find(t => t.id === tileId);
-        if (!tile || tile.locked || tile.hidden) break;
+        let nextTiles = [...prevState.tiles];
+        const tileIdx = nextTiles.findIndex(t => t.id === tileId);
+        if (tileIdx === -1) break;
 
-        const categories = Array.from(new Set(prevState.tiles.map(t => t.realCategory)));
-        const catColumns: Record<string, Tile[]> = {};
-        categories.forEach(cat => { catColumns[cat] = []; });
-        prevState.tiles.forEach(t => { catColumns[t.realCategory].push(t); });
-
-        const col = catColumns[tile.realCategory];
-        const idx = col.findIndex(t => t.id === tileId);
-        if (idx !== -1) {
-            const t = col[idx];
-            col.splice(idx, 1);
-            if (direction === 'top') col.unshift(t);
-            else col.push(t);
+        const tile = nextTiles[tileIdx];
+        if (direction === 'top') {
+          // Splice and unshift to top of column logic is in applyGridPhysics
+          nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow, tileId);
+        } else {
+          // Manual Bottom: We'll sink it
+          nextTiles = nextTiles.map(t => t.id === tileId ? { ...t, hidden: true } : t);
+          nextTiles = applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow);
+          // Restore the tile but it's now at the bottom because applyGridPhysics pushes hidden to bottom
+          nextTiles = nextTiles.map(t => t.id === tileId ? { ...t, hidden: false } : t);
         }
-
-        // Standard gravity pass
-        categories.forEach(cat => {
-            const c = catColumns[cat];
-            const active = c.filter(t => !t.hidden && !t.locked);
-            const hidden = c.filter(t => t.hidden || t.locked);
-            c.length = 0;
-            c.push(...active, ...hidden);
-        });
-
-        const flattenedTiles: Tile[] = [];
-        const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
-        for (let r = 0; r < maxRowItems; r++) {
-            categories.forEach(cat => {
-                if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
-            });
-        }
-        result.next = { ...prevState, tiles: flattenedTiles };
+        result.next = { ...prevState, tiles: nextTiles };
         break;
       }
     }
 
+    // Completion Logic
     if (result.success && (action.type === 'MERGE_TILES' || action.type === 'TAG_TILE' || action.type === 'START_GAME')) {
       const groupCounts: Record<string, number> = {};
       result.next.tiles.forEach(tile => { if (tile.userGroupId && !tile.locked && !tile.hidden) groupCounts[tile.userGroupId] = (groupCounts[tile.userGroupId] || 0) + tile.itemCount; });
@@ -328,9 +276,11 @@ export function useGameLogic(initialRoomCode: string | null) {
   const handleAction = useCallback((action: GameAction) => {
     const startTime = performance.now();
     
+    // CAPTURE SCROLL & BLUR
     if (typeof document !== 'undefined') {
       const grid = document.querySelector('.game-grid-scroll-container');
       if (grid) scrollPosRef.current = grid.scrollTop;
+      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     }
 
     if (action.type === 'TAG_TILE' && action.payload.groupId) trackLocalTouch(action.payload.groupId);
@@ -346,6 +296,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     setState(prev => {
       const result = applyActionToState(action, prev);
       
+      // Atomic Contribution Stats
       if (!prev.roomCode && (action.type === 'MERGE_TILES' || (action.type === 'TAG_TILE' && action.payload.groupId))) {
         const currentStats = prev.playerStats['local'] || { name: 'You', score: 0, mistakes: 0, lastActive: Date.now() };
         const updatedStats = {
@@ -378,6 +329,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     log(`[PERF] ${action.type} processed in ${(endTime - startTime).toFixed(2)}ms`);
   }, [dispatchAction, applyActionToState, trackLocalTouch]);
 
+  // PUBLIC MODULAR API
   const game = useMemo(() => ({
     merge: (t1: string, t2: string) => handleAction({ type: 'MERGE_TILES', payload: { tile1Id: t1, tile2Id: t2, newGroupColor: getRandomColor(stateRef.current.userGroups.map(g => g.color)), newGroupId: Math.random().toString(36).substring(2, 9) } }),
     tag: (tileId: string, groupId: string | null) => handleAction({ type: 'TAG_TILE', payload: { tileId, groupId, newGroupId: Math.random().toString(36).substring(2, 9) } }),
@@ -397,7 +349,6 @@ export function useGameLogic(initialRoomCode: string | null) {
     start: (multi: boolean, settings: GameSettings) => {
       const { numCategories, itemsPerCategory, difficulty, includeNiche, activeTags, manualCategories, customCategories } = settings;
       let selectedCatsInfo: { name: string, items: string[] }[] = [];
-
       if (customCategories && customCategories.length > 0) {
         selectedCatsInfo = customCategories.map(c => ({ name: c.name, items: c.items.slice(0, itemsPerCategory) })).slice(0, numCategories);
       } else {
@@ -408,68 +359,36 @@ export function useGameLogic(initialRoomCode: string | null) {
           if (activeTags.length > 0 && !cat.tags.some(tag => activeTags.includes(tag))) return false;
           return true;
         });
-
         let selectedNames: string[] = [];
         if (manualCategories.length > 0) { selectedNames = manualCategories.filter(name => categoriesData[name]); }
-        
-        const shuffledPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
+        const remainingNeeded = numCategories - selectedNames.length;
+        if (remainingNeeded > 0) {
+          const randomPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
+          selectedNames = [...selectedNames, ...randomPool.slice(0, remainingNeeded)];
+        }
         const usedItems = new Set<string>();
-        
-        selectedNames.forEach(name => {
-          const items = categoriesData[name].items;
-          items.slice(0, itemsPerCategory).forEach(i => usedItems.add(i.toLowerCase()));
-        });
-
-        const finalSelectedNames = [...selectedNames];
-        for (const catName of shuffledPool) {
-          if (finalSelectedNames.length >= numCategories) break;
-          
+        selectedNames.forEach(catName => {
           const cat = categoriesData[catName];
           let itemsPool = [...cat.items];
           if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
           else if (difficulty === 'hard') itemsPool = [...itemsPool].reverse();
-
           let addedItems: string[] = [];
           for (const item of itemsPool) {
             if (addedItems.length >= itemsPerCategory) break;
-            if (!usedItems.has(item.toLowerCase())) {
-              addedItems.push(item);
-            }
+            if (!usedItems.has(item.toLowerCase())) { usedItems.add(item.toLowerCase()); addedItems.push(item); }
           }
-
-          if (addedItems.length === itemsPerCategory) {
-            addedItems.forEach(i => usedItems.add(i.toLowerCase()));
-            finalSelectedNames.push(catName);
-            selectedCatsInfo.push({ name: catName, items: addedItems });
-          }
-        }
-        
-        selectedNames.forEach(catName => {
-           if (selectedCatsInfo.find(c => c.name === catName)) return;
-           const cat = categoriesData[catName];
-           let itemsPool = [...cat.items];
-           if (difficulty === 'random') itemsPool = shuffleArray(itemsPool);
-           else if (difficulty === 'hard') itemsPool = [...itemsPool].reverse();
-           
-           let addedItems: string[] = [];
-           for (const item of itemsPool) {
-             if (addedItems.length >= itemsPerCategory) break;
-             addedItems.push(item);
-           }
-           if (addedItems.length > 0) {
-             selectedCatsInfo.push({ name: catName, items: addedItems });
-           }
+          if (addedItems.length === itemsPerCategory) { selectedCatsInfo.push({ name: catName, items: addedItems }); }
         });
       }
 
       let initialTiles: Tile[] = [];
-      selectedCatsInfo.forEach(cat => {
+      selectedCatsInfo.forEach((cat, colIdx) => {
         cat.items.forEach(item => {
-          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1 });
+          initialTiles.push({ id: Math.random().toString(36).substring(2, 9), text: item, realCategory: cat.name, userGroupId: null, locked: false, itemCount: 1, col: colIdx });
         });
       });
 
-      initialTiles = applyPhysicsToTiles(shuffleArray(initialTiles), settings);
+      initialTiles = applyGridPhysics(shuffleArray(initialTiles), settings, numCategories);
 
       const newState: GameState = { 
         roomCode: multi ? Math.random().toString(36).substring(2, 7).toUpperCase() : null, 
@@ -500,7 +419,7 @@ export function useGameLogic(initialRoomCode: string | null) {
       }
     },
     quit: () => { localStorage.removeItem('superConnectionsState'); setIsPlaying(false); setState(prev => ({ ...prev, roomCode: null })); router.push('/'); }
-  }), [handleAction, router, applyPhysicsToTiles]);
+  }), [handleAction, router]);
 
   useEffect(() => {
     if (isLoaded) return;

@@ -22,6 +22,44 @@ const parseCookie = (str, name) => {
     return match ? match[2] : null;
 };
 
+// SHARED PHYSICS LOGIC (Mirror of src/utils/physics.js)
+function applyGridPhysics(tiles, settings, tilesPerRow, survivorId = null) {
+  if (!settings || (!settings.popToTop && settings.gravity !== 'up')) {
+    return tiles;
+  }
+
+  const numCols = tilesPerRow;
+  const colBuckets = Array.from({ length: numCols }, () => []);
+
+  tiles.forEach(tile => {
+    const col = (tile.col !== undefined) ? tile.col : (tiles.indexOf(tile) % numCols);
+    if (colBuckets[col]) colBuckets[col].push(tile);
+  });
+
+  colBuckets.forEach(bucket => {
+    if (bucket.length === 0) return;
+    const active = bucket.filter(t => !t.hidden && !t.locked && t.id !== survivorId);
+    const hidden = bucket.filter(t => t.hidden || t.locked);
+    const survivor = bucket.find(t => t.id === survivorId);
+
+    bucket.length = 0;
+    if (survivor && settings.popToTop) bucket.push(survivor);
+    else if (survivor) active.unshift(survivor);
+
+    if (settings.gravity === 'up') bucket.push(...active, ...hidden);
+    else bucket.push(...active, ...hidden);
+  });
+
+  const flattened = [];
+  const maxRows = Math.max(...colBuckets.map(b => b.length));
+  for (let r = 0; r < maxRows; r++) {
+    for (let c = 0; c < numCols; c++) {
+      if (colBuckets[c][r]) flattened.push(colBuckets[c][r]);
+    }
+  }
+  return flattened;
+}
+
 app.prepare().then(() => {
   const httpServer = createServer(async (req, res) => {
     try {
@@ -78,7 +116,7 @@ app.prepare().then(() => {
        if (!rooms[roomCode]) {
            rooms[roomCode] = {
                hostId: userId,
-               state: initialGameState || { tiles: [], userGroups: [], completedCategories: [], mistakes: 0, score: 0, playerStats: {}, settings: { numCategories: 4, itemsPerCategory: 4, gravity: 'up', popToTop: true } },
+               state: initialGameState || null,
                version: initialGameState ? Date.now() : 0,
                cleanupTimer: null
            };
@@ -146,39 +184,8 @@ app.prepare().then(() => {
                 }
             });
 
-            // --- CATEGORY-BASED STABLE PHYSICS ---
-            if (state.settings && (state.settings.popToTop || state.settings.gravity === 'up')) {
-                const categories = Array.from(new Set(state.tiles.map(t => t.realCategory)));
-                const catColumns = {};
-                categories.forEach(cat => { catColumns[cat] = []; });
-                
-                state.tiles.forEach(tile => { catColumns[tile.realCategory].push(tile); });
-
-                categories.forEach(cat => {
-                    const col = catColumns[cat];
-                    const sIdx = col.findIndex(t => t.id === survivorId);
-                    if (sIdx !== -1) {
-                        const sTile = col[sIdx];
-                        col.splice(sIdx, 1);
-                        col.unshift(sTile);
-                    }
-                    if (state.settings.gravity === 'up') {
-                        const active = col.filter(t => !t.hidden && !t.locked);
-                        const hidden = col.filter(t => t.hidden || t.locked);
-                        col.length = 0;
-                        col.push(...active, ...hidden);
-                    }
-                });
-
-                const flattenedTiles = [];
-                const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
-                for (let r = 0; r < maxRowItems; r++) {
-                    categories.forEach(cat => {
-                        if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
-                    });
-                }
-                state.tiles = flattenedTiles;
-            }
+            // Unified Physics Pass
+            state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow, survivorId);
             return true;
         } else {
             state.mistakes += 1;
@@ -291,37 +298,14 @@ app.prepare().then(() => {
                 const { tileId, direction } = action.payload;
                 const tile = state.tiles.find(t => t.id === tileId);
                 if (tile && !tile.locked && !tile.hidden) {
-                    const categories = Array.from(new Set(state.tiles.map(t => t.realCategory)));
-                    const catColumns = {};
-                    categories.forEach(cat => { catColumns[cat] = []; });
-                    state.tiles.forEach(t => { catColumns[t.realCategory].push(t); });
-
-                    const col = catColumns[tile.realCategory];
-                    const idx = col.findIndex(t => t.id === tileId);
-                    if (idx !== -1) {
-                        const t = col[idx];
-                        col.splice(idx, 1);
-                        if (direction === 'top') col.unshift(t);
-                        else col.push(t);
+                    if (direction === 'top') {
+                        state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow, tileId);
+                    } else {
+                        // Sink to bottom
+                        tile.hidden = true;
+                        state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
+                        tile.hidden = false;
                     }
-
-                    // Standard gravity pass
-                    categories.forEach(cat => {
-                        const c = catColumns[cat];
-                        const active = c.filter(t => !t.hidden && !t.locked);
-                        const hidden = c.filter(t => t.hidden || t.locked);
-                        c.length = 0;
-                        c.push(...active, ...hidden);
-                    });
-
-                    const flattenedTiles = [];
-                    const maxRowItems = Math.max(...Object.values(catColumns).map(c => c.length));
-                    for (let r = 0; r < maxRowItems; r++) {
-                        categories.forEach(cat => {
-                            if (catColumns[cat][r]) flattenedTiles.push(catColumns[cat][r]);
-                        });
-                    }
-                    state.tiles = flattenedTiles;
                     stateChanged = true;
                     actionResult = { success: true, actionType: action.type };
                 }
@@ -356,6 +340,7 @@ app.prepare().then(() => {
             }
         });
 
+        // Always broadcast state to keep definitive tile order in sync
         room.version = Date.now();
         io.to(roomCode).emit('state_update', state);
         if (stateChanged && actionResult.success) {

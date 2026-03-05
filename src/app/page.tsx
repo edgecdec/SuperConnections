@@ -83,12 +83,9 @@ function GameContent() {
 
   const onTileDoubleClick = useCallback((e: React.MouseEvent, tile: Tile) => {
     if (tile.locked) return;
-    
     if (e.ctrlKey) {
-      // Ctrl + Double Click -> Bottom
       game.reorder(tile.id, 'bottom');
     } else {
-      // Double Click -> Top (Except combined)
       if (tile.itemCount === 1) {
         game.reorder(tile.id, 'top');
       }

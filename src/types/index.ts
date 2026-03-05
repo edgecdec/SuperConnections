@@ -5,6 +5,7 @@ export type Tile = {
   userGroupId: string | null;
   locked: boolean;
   itemCount: number;
+  col: number;
   hidden?: boolean;
 };
 
