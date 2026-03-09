@@ -78,6 +78,9 @@ export const GameGrid = React.memo(({
   const involvedTileIds = lastActionResult?.involvedTileIds || [];
   const actionFailed = lastActionResult?.success === false;
 
+  const maxDurableKey = activeTiles.length > 0 ? Math.max(...activeTiles.map(t => t.durableKey !== undefined ? t.durableKey : 0)) : -1;
+  const currentMaxRow = Math.floor(maxDurableKey / tilesPerRow) + 1;
+
   return (
     <Box 
       ref={containerRef}
@@ -141,10 +144,8 @@ export const GameGrid = React.memo(({
             );
           })}
           {completedCategories.map((cat, idx) => {
-            // Place completed categories at the bottom
-            // We calculate an approximate offset row based on max possible active rows
-            const maxActiveRows = Math.ceil(numCategories * gridSize / tilesPerRow) + 2;
-            const rowPos = maxActiveRows + idx;
+            // Place completed categories immediately below the last active row
+            const rowPos = currentMaxRow + 1 + idx;
 
             return (
               <Paper 
