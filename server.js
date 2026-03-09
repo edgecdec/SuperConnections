@@ -162,7 +162,7 @@ app.prepare().then(() => {
            userId: userId
        });
 
-       if (room.state && room.state.tiles && room.state.tiles.length > 0) {
+       if (room.state) {
            socket.emit('state_update', room.state);
        }
     });

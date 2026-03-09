@@ -42,10 +42,10 @@ function GameContent() {
   const prevCompletedCountRef = useRef(0);
 
   useEffect(() => {
-    if (isLoaded && !isPlaying) {
+    if (isLoaded && !isPlaying && !roomCodeFromUrl) {
       router.push('/');
     }
-  }, [isLoaded, isPlaying, router]);
+  }, [isLoaded, isPlaying, roomCodeFromUrl, router]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -273,7 +273,13 @@ function GameContent() {
 
   return (
     <Container maxWidth={false} disableGutters>
-      {isPlaying ? renderGame() : null}
+      {isPlaying ? renderGame() : (
+        <Box display="flex" flexDirection="column" alignItems="center" justifyContent="center" height="100vh">
+          <Typography variant="h5" color="textSecondary" gutterBottom>
+            {roomCodeFromUrl ? `Connecting to room ${roomCodeFromUrl}...` : "Loading your game..."}
+          </Typography>
+        </Box>
+      )}
     </Container>
   );
 }
