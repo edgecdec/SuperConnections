@@ -29,7 +29,7 @@ const shuffleArray = <T>(array: T[]): T[] => {
   return next;
 };
 
-export function useGameLogic(initialRoomCode: string | null) {
+export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: boolean = false) {
   const router = useRouter();
   const [state, setState] = useState<GameState>({
     roomCode: initialRoomCode,
@@ -524,11 +524,12 @@ export function useGameLogic(initialRoomCode: string | null) {
         setState(newState);
         setIsPlaying(true);
         handleAction({ type: 'START_GAME', payload: { settings, tiles: finalTiles } });
-        router.push(`/?room=${newState.roomCode}`);
+        router.push(`/play?room=${newState.roomCode}`);
       } else {
+        localStorage.setItem('superConnectionsState', JSON.stringify({ ...newState, isPlaying: true }));
         setState(newState);
         setIsPlaying(true);
-        router.push('/');
+        router.push('/play');
       }
     },
     quit: () => { localStorage.removeItem('superConnectionsState'); setIsPlaying(false); setState(prev => ({ ...prev, roomCode: null })); router.push('/'); }
@@ -536,15 +537,17 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   useEffect(() => {
     if (isLoaded) return;
-    const saved = localStorage.getItem('superConnectionsState');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.isPlaying && (!initialRoomCode || parsed.roomCode === initialRoomCode)) { setState(parsed); setIsPlaying(true); }
-      } catch (e) {}
+    if (!ignoreLocalSave) {
+      const saved = localStorage.getItem('superConnectionsState');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.isPlaying && (!initialRoomCode || parsed.roomCode === initialRoomCode)) { setState(parsed); setIsPlaying(true); }
+        } catch (e) {}
+      }
     }
     setIsLoaded(true);
-  }, [initialRoomCode, isLoaded]);
+  }, [initialRoomCode, isLoaded, ignoreLocalSave]);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
@@ -598,5 +601,5 @@ export function useGameLogic(initialRoomCode: string | null) {
     return state.tiles.filter(t => !t.locked && !t.hidden);
   }, [state.tiles]);
 
-  return { state, isPlaying, isHost, userId, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef };
+  return { state, isPlaying, isLoaded, isHost, userId, groupStats, selectedTile, setSelectedTile, game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef };
 }
