@@ -124,7 +124,8 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
             ...t, 
             itemCount: t.itemCount + merged.itemCount,
             userGroupId: targetId,
-            isMaster: true
+            isMaster: true,
+            text: Array.from(new Set([...survivorWords, ...mergedWords])).join(', ')
           };
         }
         if ((sOldId && t.userGroupId === sOldId) || (mOldId && t.userGroupId === mOldId)) return { ...t, userGroupId: targetId };
@@ -585,12 +586,15 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
     const map: Record<string, string> = {};
     state.completedCategories.forEach(cat => { 
       const masterTile = state.tiles.find(t => t.realCategory === cat && t.isMaster);
-      if (masterTile) {
-        // Master tile has all words in its text property
+      if (masterTile && masterTile.text.includes(', ')) {
         map[cat] = masterTile.text;
       } else {
-        // Fallback for older sessions or unmerged auto-solves
-        map[cat] = state.tiles.filter(t => t.realCategory === cat && !t.hidden).map(t => t.text).join(', '); 
+        // Find all original tiles for this category (even if hidden)
+        const allWords = state.tiles
+          .filter(t => t.realCategory === cat)
+          .map(t => t.text)
+          .flatMap(txt => txt.split(', ').map(s => s.trim()));
+        map[cat] = Array.from(new Set(allWords)).join(', ');
       }
     });
     return map;

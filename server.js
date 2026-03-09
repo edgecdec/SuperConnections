@@ -203,9 +203,14 @@ app.prepare().then(() => {
             const sOldId = survivor.userGroupId;
             const mOldId = merged.userGroupId;
 
+            const survivorWords = survivor.userGroupId ? 
+                (state.userGroups.find(g => g.id === survivor.userGroupId)?.words || [survivor.text]) : 
+                [survivor.text];
+
             survivor.itemCount = survivor.itemCount + merged.itemCount;
             survivor.userGroupId = targetId;
             survivor.isMaster = true;
+            survivor.text = Array.from(new Set([...survivorWords, ...mergedWords])).join(', ');
 
             merged.hidden = true;
             merged.userGroupId = targetId;
