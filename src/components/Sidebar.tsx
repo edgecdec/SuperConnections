@@ -169,18 +169,16 @@ export const Sidebar = React.memo(({
                 Shuffle Board (Randomize)
               </Button>
             </Box>
-            {isHost && (
-              <Button 
-                variant="contained" 
-                color="error"
-                size="small" 
-                fullWidth 
-                sx={{ mt: 2 }}
-                onClick={onQuitGame}
-              >
-                Quit Game
-              </Button>
-            )}
+            <Button 
+              variant="contained" 
+              color="error"
+              size="small" 
+              fullWidth 
+              sx={{ mt: 2 }}
+              onClick={onQuitGame}
+            >
+              Exit Game
+            </Button>
           </Box>
         </Collapse>
       </Box>
