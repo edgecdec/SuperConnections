@@ -47,9 +47,20 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
   const allCategories = useMemo(() => Object.keys(categoriesData).sort(), []);
   
   const allTags = useMemo(() => {
-    const tags = new Set<string>();
-    Object.values(categoriesData).forEach(cat => cat.tags.forEach(t => tags.add(t)));
-    return Array.from(tags).sort();
+    const domains = new Set<string>();
+    const subTags = new Set<string>();
+    
+    Object.values(categoriesData).forEach(cat => {
+      if (cat.tags && cat.tags.length > 0) {
+        domains.add(cat.tags[0]);
+        cat.tags.slice(1).forEach(t => subTags.add(t));
+      }
+    });
+
+    const sortedDomains = Array.from(domains).sort();
+    const sortedSubTags = Array.from(subTags).filter(t => !domains.has(t)).sort();
+
+    return [...sortedDomains, ...sortedSubTags];
   }, []);
 
   const numError = numCategories < 2 || numCategories > 50;
@@ -177,6 +188,7 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
 
                 <Autocomplete
                   multiple
+                  disableCloseOnSelect
                   options={allTags}
                   value={activeTags}
                   onChange={(e, val) => setActiveTags(val)}
