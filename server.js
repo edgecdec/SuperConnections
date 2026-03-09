@@ -355,6 +355,24 @@ app.prepare().then(() => {
                 }
                 break;
             }
+            case 'INSERT_TILE': {
+                const { draggedTileId, targetTileId, position } = action.payload;
+                const draggedIdx = state.tiles.findIndex(t => t.id === draggedTileId);
+                const targetIdx = state.tiles.findIndex(t => t.id === targetTileId);
+                if (draggedIdx !== -1 && targetIdx !== -1) {
+                    const draggedTile = state.tiles[draggedIdx];
+                    const targetTile = state.tiles[targetIdx];
+
+                    draggedTile.col = targetTile.durableKey % state.tilesPerRow;
+                    draggedTile.order = targetTile.order + (position === 'before' ? -0.5 : 0.5);
+                    draggedTile.durableKey = targetTile.durableKey;
+
+                    state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
+                    stateChanged = true;
+                    actionResult = { success: true, actionType: action.type };
+                }
+                break;
+            }
             case 'REORDER_TILE': {
                 const { tileId, direction } = action.payload;
                 const tile = state.tiles.find(t => t.id === tileId);

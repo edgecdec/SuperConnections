@@ -83,4 +83,5 @@ export type GameAction =
   | { type: 'CLEAR_RESULT'; payload?: never }
   | { type: 'SET_PLAYER_NAME'; payload: { name: string } }
   | { type: 'START_GAME'; payload: { settings: GameSettings; tiles: Tile[] } }
-  | { type: 'REORDER_TILE'; payload: { tileId: string; direction: 'top' | 'bottom' } };
+  | { type: 'REORDER_TILE'; payload: { tileId: string; direction: 'top' | 'bottom' } }
+  | { type: 'INSERT_TILE'; payload: { draggedTileId: string; targetTileId: string; position: 'before' | 'after' } };

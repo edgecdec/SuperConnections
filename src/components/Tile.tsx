@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Paper, Typography, IconButton, Tooltip } from '@mui/material';
 import LabelIcon from '@mui/icons-material/Label';
 import { Tile, UserGroup } from '../types';
@@ -14,7 +14,7 @@ interface TileProps {
   onTileClick: (e: React.MouseEvent, tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
   onDragOver: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDrop: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
+  onDrop: (e: React.DragEvent<HTMLDivElement>, tile: Tile, intent: 'before' | 'after' | 'merge') => void;
   onTileAuxClick: (e: React.MouseEvent, tile: Tile) => void;
   tooltipText: string;
   gridColumn?: number;
@@ -37,21 +37,51 @@ export const TileComponent = React.memo(({
   gridColumn,
   gridRow
 }: TileProps) => {
-  // --- PERFORMANCE LOG ---
-  console.log(`[${new Date().toLocaleTimeString()}] [RENDER] Tile ${tile.id}`);
-  
+  const [dragIntent, setDragIntent] = useState<'before' | 'after' | 'merge' | null>(null);
+
+  const handleDragOverLocal = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    onDragOver(e);
+    
+    // Calculate intent based on mouse position relative to tile height
+    const rect = e.currentTarget.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    if (y < rect.height * 0.25) {
+      setDragIntent('before');
+    } else if (y > rect.height * 0.75) {
+      setDragIntent('after');
+    } else {
+      setDragIntent('merge');
+    }
+  };
+
+  const handleDragLeaveLocal = () => setDragIntent(null);
+
+  const handleDropLocal = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const intent = dragIntent || 'merge';
+    setDragIntent(null);
+    onDrop(e, tile, intent);
+  };
+
   let displayText = tile.text;
   if (tile.itemCount > 1) {
     if (group && tile.isMaster) {
       displayText = getGroupDisplayName(group.name, tooltipText);
     } else if (group) {
-      // Non-master merged tiles are usually hidden, but just in case:
       displayText = "";
     } else {
       const items = tile.text.split(', ').map(s => s.trim());
       displayText = items.length <= 2 ? items.join(', ') : `${items.slice(0, 2).join(', ')}...`;
     }
   }
+
+  let borderStyle = group ? '2px solid #333' : '2px solid transparent';
+  let borderTopStyle = borderStyle;
+  let borderBottomStyle = borderStyle;
+  
+  if (dragIntent === 'before') borderTopStyle = '4px solid #1976d2';
+  if (dragIntent === 'after') borderBottomStyle = '4px solid #1976d2';
 
   return (
     <Tooltip title={tooltipText} arrow placement="top" disableInteractive>
@@ -62,8 +92,9 @@ export const TileComponent = React.memo(({
         onMouseDown={(e) => { if (e.button === 1) e.preventDefault(); }}
         draggable={!tile.locked}
         onDragStart={(e) => onDragStart(e, tile)}
-        onDragOver={onDragOver}
-        onDrop={(e) => onDrop(e, tile)}
+        onDragOver={handleDragOverLocal}
+        onDragLeave={handleDragLeaveLocal}
+        onDrop={handleDropLocal}
         className={isError ? 'shake-error' : ''}
         sx={{
           gridColumn,
@@ -75,8 +106,11 @@ export const TileComponent = React.memo(({
           p: 1,
           textAlign: 'center',
           minHeight: '80px',
-          backgroundColor: group ? group.color : '#fff',
-          border: group ? '2px solid #333' : '2px solid transparent',
+          backgroundColor: dragIntent === 'merge' ? '#e3f2fd' : (group ? group.color : '#fff'),
+          borderLeft: borderStyle,
+          borderRight: borderStyle,
+          borderTop: borderTopStyle,
+          borderBottom: borderBottomStyle,
           outline: isSelected ? '4px solid #1976d2' : 'none',
           cursor: tile.locked ? 'default' : 'pointer',
           wordBreak: 'normal',
@@ -110,7 +144,6 @@ export const TileComponent = React.memo(({
     </Tooltip>
   );
 }, (prev, next) => {
-  // DEEP MEMOIZATION
   return prev.isSelected === next.isSelected &&
          prev.isError === next.isError &&
          prev.gridSize === next.gridSize &&

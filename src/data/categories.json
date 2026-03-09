@@ -2,7 +2,7 @@
     "Desserts": {
         "niche": false,
         "tags": [
-            "Food"
+            "🍔 Food & Drink"
         ],
         "items": [
             "Tiramisu",
@@ -109,7 +109,8 @@
     "Children's Book Series": {
         "niche": false,
         "tags": [
-            "Literature"
+            "🎨 Arts & Literature",
+            "Books"
         ],
         "items": [
             "Harry Potter",
@@ -217,7 +218,8 @@
     "Famous Poems": {
         "niche": false,
         "tags": [
-            "Literature"
+            "🎨 Arts & Literature",
+            "Poetry"
         ],
         "items": [
             "The Raven",
@@ -325,7 +327,8 @@
     "Famous NBA Players": {
         "niche": false,
         "tags": [
-            "Sports"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Michael Jordan",
@@ -433,7 +436,8 @@
     "TV Dramas and Mysteries": {
         "niche": false,
         "tags": [
-            "Entertainment"
+            "🍿 Entertainment & Pop Culture",
+            "Television"
         ],
         "items": [
             "The Sopranos",
@@ -541,7 +545,8 @@
     "Cat Breeds": {
         "niche": false,
         "tags": [
-            "Nature"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Persian",
@@ -648,7 +653,8 @@
     "Magazine Names": {
         "niche": false,
         "tags": [
-            "Pop Culture"
+            "🎨 Arts & Literature",
+            "Publishing"
         ],
         "items": [
             "National Geographic",
@@ -753,7 +759,8 @@
     "Driving and Road Signs": {
         "niche": false,
         "tags": [
-            "Life Skills"
+            "🏛 History & Society",
+            "Daily Life"
         ],
         "items": [
             "Stop",
@@ -861,7 +868,8 @@
     "Currencies": {
         "niche": false,
         "tags": [
-            "Economics"
+            "💼 Business & Tech",
+            "Finance"
         ],
         "items": [
             "US Dollar",
@@ -969,6 +977,7 @@
     "Over the Counter Medications": {
         "niche": false,
         "tags": [
+            "🔬 Science & Nature",
             "Medicine"
         ],
         "items": [
@@ -1077,8 +1086,8 @@
     "90s Songs": {
         "niche": false,
         "tags": [
-            "Music",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Music"
         ],
         "items": [
             "Smells Like Teen Spirit",
@@ -1186,8 +1195,8 @@
     "Bones and Body Parts": {
         "niche": false,
         "tags": [
-            "Science",
-            "Academic"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Femur",
@@ -1295,8 +1304,8 @@
     "Types of Dance": {
         "niche": false,
         "tags": [
-            "Art",
-            "Entertainment"
+            "🎨 Arts & Literature",
+            "Performing Arts"
         ],
         "items": [
             "Ballet",
@@ -1404,7 +1413,7 @@
     "Breakfast Cereal Names": {
         "niche": false,
         "tags": [
-            "Food",
+            "🍔 Food & Drink",
             "Brands"
         ],
         "items": [
@@ -1513,7 +1522,7 @@
     "Non-Alcoholic Drinks": {
         "niche": false,
         "tags": [
-            "Food"
+            "🍔 Food & Drink"
         ],
         "items": [
             "Water",
@@ -1621,7 +1630,7 @@
     "Names of Ships": {
         "niche": true,
         "tags": [
-            "History"
+            "🏛 History & Society"
         ],
         "items": [
             "RMS Titanic",
@@ -1722,8 +1731,8 @@
     "Famous Explorers": {
         "niche": false,
         "tags": [
-            "History",
-            "Geography"
+            "🏛 History & Society",
+            "Historical Figures"
         ],
         "items": [
             "Christopher Columbus",
@@ -1830,8 +1839,8 @@
     "Marvel Villains": {
         "niche": false,
         "tags": [
-            "Pop Culture",
-            "Entertainment"
+            "🍿 Entertainment & Pop Culture",
+            "Animation & Comics"
         ],
         "items": [
             "Thanos",
@@ -1939,7 +1948,8 @@
     "Operating Systems": {
         "niche": false,
         "tags": [
-            "Tech"
+            "💼 Business & Tech",
+            "Software"
         ],
         "items": [
             "Windows 10",
@@ -2047,8 +2057,8 @@
     "Kitchen Tools": {
         "niche": false,
         "tags": [
-            "Food",
-            "Home"
+            "🍔 Food & Drink",
+            "Cooking"
         ],
         "items": [
             "Chef's Knife",
@@ -2156,7 +2166,8 @@
     "Game Shows": {
         "niche": false,
         "tags": [
-            "Entertainment"
+            "🍿 Entertainment & Pop Culture",
+            "Television"
         ],
         "items": [
             "Jeopardy!",
@@ -2264,8 +2275,8 @@
     "Taylor Swift Songs": {
         "niche": false,
         "tags": [
-            "Music",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Music"
         ],
         "items": [
             "All Too Well",
@@ -2373,7 +2384,8 @@
     "Generation 1 Pokémon": {
         "niche": false,
         "tags": [
-            "Other"
+            "🏈 Sports & Games",
+            "Video Games"
         ],
         "items": [
             "Pikachu",
@@ -2532,7 +2544,8 @@
     "Insects": {
         "niche": false,
         "tags": [
-            "Nature"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Ant",
@@ -2640,8 +2653,8 @@
     "Japanese Car Models": {
         "niche": true,
         "tags": [
-            "Brands",
-            "Tech"
+            "💼 Business & Tech",
+            "Brands"
         ],
         "items": [
             "Corolla",
@@ -2749,8 +2762,8 @@
     "Famous Scientists": {
         "niche": false,
         "tags": [
-            "Science",
-            "History"
+            "🔬 Science & Nature",
+            "Academic"
         ],
         "items": [
             "Isaac Newton",
@@ -2858,8 +2871,8 @@
     "Dinosaurs": {
         "niche": false,
         "tags": [
-            "Science",
-            "Nature"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Tyrannosaurus Rex",
@@ -2967,7 +2980,7 @@
     "Candy Bars": {
         "niche": false,
         "tags": [
-            "Food",
+            "🍔 Food & Drink",
             "Brands"
         ],
         "items": [
@@ -3075,7 +3088,7 @@
     "Films of Eastwood, Cruise, Cage": {
         "niche": false,
         "tags": [
-            "Entertainment"
+            "🍿 Entertainment & Pop Culture"
         ],
         "items": [
             "The Good, the Bad and the Ugly",
@@ -3183,7 +3196,8 @@
     "Colors": {
         "niche": false,
         "tags": [
-            "Art"
+            "🎨 Arts & Literature",
+            "Design"
         ],
         "items": [
             "Red",
@@ -3291,6 +3305,7 @@
     "Hotel Chains": {
         "niche": false,
         "tags": [
+            "💼 Business & Tech",
             "Brands"
         ],
         "items": [
@@ -3399,8 +3414,8 @@
     "US National Parks": {
         "niche": false,
         "tags": [
-            "Geography",
-            "Nature"
+            "🌍 Geography & Places",
+            "Landmarks"
         ],
         "items": [
             "Yellowstone",
@@ -3507,7 +3522,8 @@
     "European Soccer Clubs": {
         "niche": false,
         "tags": [
-            "Sports"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Real Madrid",
@@ -3615,8 +3631,8 @@
     "Constellations": {
         "niche": false,
         "tags": [
-            "Science",
-            "Nature"
+            "🔬 Science & Nature",
+            "Space"
         ],
         "items": [
             "Orion",
@@ -3712,7 +3728,7 @@
     "Electronic Companies": {
         "niche": false,
         "tags": [
-            "Tech",
+            "💼 Business & Tech",
             "Brands"
         ],
         "items": [
@@ -3821,6 +3837,7 @@
     "Colleges and Universities": {
         "niche": false,
         "tags": [
+            "🏛 History & Society",
             "Academic"
         ],
         "items": [
@@ -3929,6 +3946,7 @@
     "Global Airlines": {
         "niche": false,
         "tags": [
+            "💼 Business & Tech",
             "Brands"
         ],
         "items": [
@@ -4037,8 +4055,8 @@
     "Famous Museums": {
         "niche": false,
         "tags": [
-            "Art",
-            "History"
+            "🌍 Geography & Places",
+            "Landmarks"
         ],
         "items": [
             "Louvre",
@@ -4147,8 +4165,8 @@
     "Famous Paintings/Sculptures": {
         "niche": false,
         "tags": [
-            "Art",
-            "History"
+            "🎨 Arts & Literature",
+            "Visual Arts"
         ],
         "items": [
             "Mona Lisa",
@@ -4256,8 +4274,8 @@
     "Michael Jackson Songs": {
         "niche": true,
         "tags": [
-            "Music",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Music"
         ],
         "items": [
             "Billie Jean",
@@ -4365,7 +4383,7 @@
     "Types of Soup": {
         "niche": false,
         "tags": [
-            "Food"
+            "🍔 Food & Drink"
         ],
         "items": [
             "Tomato Soup",
@@ -4473,7 +4491,7 @@
     "Asian Countries": {
         "niche": false,
         "tags": [
-            "Geography"
+            "🌍 Geography & Places"
         ],
         "items": [
             "China",
@@ -4536,8 +4554,8 @@
     "Medical Specialties": {
         "niche": false,
         "tags": [
-            "Medicine",
-            "Academic"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Surgery",
@@ -4656,8 +4674,8 @@
     "Vegetables and Fruits": {
         "niche": false,
         "tags": [
-            "Food",
-            "Nature"
+            "🍔 Food & Drink",
+            "Plants"
         ],
         "items": [
             "Carrot",
@@ -4764,7 +4782,8 @@
     "Classic Board Games": {
         "niche": false,
         "tags": [
-            "Games"
+            "🏈 Sports & Games",
+            "Tabletop Games"
         ],
         "items": [
             "Chess",
@@ -4871,7 +4890,7 @@
     "Brands of Beer": {
         "niche": false,
         "tags": [
-            "Food",
+            "🍔 Food & Drink",
             "Brands"
         ],
         "items": [
@@ -4980,7 +4999,8 @@
     "Names of Wars": {
         "niche": false,
         "tags": [
-            "History"
+            "🏛 History & Society",
+            "Military"
         ],
         "items": [
             "World War II",
@@ -5088,8 +5108,8 @@
     "British Bands": {
         "niche": false,
         "tags": [
-            "Music",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Music"
         ],
         "items": [
             "The Beatles",
@@ -5197,8 +5217,7 @@
     "Islands": {
         "niche": false,
         "tags": [
-            "Geography",
-            "Nature"
+            "🌍 Geography & Places"
         ],
         "items": [
             "Greenland",
@@ -5306,7 +5325,7 @@
     "Fast Food Chains": {
         "niche": false,
         "tags": [
-            "Food",
+            "🍔 Food & Drink",
             "Brands"
         ],
         "items": [
@@ -5415,8 +5434,8 @@
     "Nuts": {
         "niche": false,
         "tags": [
-            "Food",
-            "Nature"
+            "🍔 Food & Drink",
+            "Plants"
         ],
         "items": [
             "Almond",
@@ -5522,8 +5541,7 @@
     "College Mascots": {
         "niche": true,
         "tags": [
-            "Sports",
-            "Academic"
+            "🏈 Sports & Games"
         ],
         "items": [
             "Uga",
@@ -5631,7 +5649,8 @@
     "Spoken Languages": {
         "niche": false,
         "tags": [
-            "Academic"
+            "🏛 History & Society",
+            "Culture"
         ],
         "items": [
             "Mandarin Chinese",
@@ -5735,6 +5754,7 @@
     "Diseases": {
         "niche": false,
         "tags": [
+            "🔬 Science & Nature",
             "Medicine"
         ],
         "items": [
@@ -5843,7 +5863,8 @@
     "TV Channels and Networks": {
         "niche": false,
         "tags": [
-            "Entertainment"
+            "🍿 Entertainment & Pop Culture",
+            "Television"
         ],
         "items": [
             "BBC",
@@ -5950,7 +5971,7 @@
     "US States": {
         "niche": false,
         "tags": [
-            "Geography"
+            "🌍 Geography & Places"
         ],
         "items": [
             "California",
@@ -6008,7 +6029,8 @@
     "Fish": {
         "niche": false,
         "tags": [
-            "Nature"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Salmon",
@@ -6116,7 +6138,7 @@
     "Types of Bread": {
         "niche": false,
         "tags": [
-            "Food"
+            "🍔 Food & Drink"
         ],
         "items": [
             "Baguette",
@@ -6224,8 +6246,8 @@
     "Programming Languages": {
         "niche": false,
         "tags": [
-            "Tech",
-            "Academic"
+            "💼 Business & Tech",
+            "Software"
         ],
         "items": [
             "Python",
@@ -6333,7 +6355,7 @@
     "Wine Varieties": {
         "niche": true,
         "tags": [
-            "Food"
+            "🍔 Food & Drink"
         ],
         "items": [
             "Cabernet Sauvignon",
@@ -6441,8 +6463,7 @@
     "Deserts": {
         "niche": true,
         "tags": [
-            "Geography",
-            "Nature"
+            "🔬 Science & Nature"
         ],
         "items": [
             "Sahara",
@@ -6550,7 +6571,7 @@
     "African Countries": {
         "niche": false,
         "tags": [
-            "Geography"
+            "🌍 Geography & Places"
         ],
         "items": [
             "Egypt",
@@ -6621,7 +6642,8 @@
     "Video Game Franchises": {
         "niche": false,
         "tags": [
-            "Games"
+            "🏈 Sports & Games",
+            "Video Games"
         ],
         "items": [
             "Mario",
@@ -6728,8 +6750,8 @@
     "Musical Terms": {
         "niche": false,
         "tags": [
-            "Music",
-            "Academic"
+            "🎨 Arts & Literature",
+            "Music"
         ],
         "items": [
             "Allegro",
@@ -6837,8 +6859,8 @@
     "Book Publishers": {
         "niche": true,
         "tags": [
-            "Brands",
-            "Literature"
+            "🎨 Arts & Literature",
+            "Brands"
         ],
         "items": [
             "Penguin Random House",
@@ -6946,8 +6968,8 @@
     "Spices and Herbs": {
         "niche": false,
         "tags": [
-            "Food",
-            "Nature"
+            "🍔 Food & Drink",
+            "Plants"
         ],
         "items": [
             "Black Pepper",
@@ -7055,8 +7077,8 @@
     "Famous Dogs": {
         "niche": false,
         "tags": [
-            "Pop Culture",
-            "Nature"
+            "🍿 Entertainment & Pop Culture",
+            "Animals"
         ],
         "items": [
             "Snoopy",
@@ -7160,8 +7182,8 @@
     "Clint Eastwood Films": {
         "niche": true,
         "tags": [
-            "Movies",
-            "Actors"
+            "🍿 Entertainment & Pop Culture",
+            "Movies"
         ],
         "items": [
             "The Good, the Bad and the Ugly",
@@ -7229,8 +7251,8 @@
     "Nicolas Cage Films": {
         "niche": true,
         "tags": [
-            "Movies",
-            "Actors"
+            "🍿 Entertainment & Pop Culture",
+            "Movies"
         ],
         "items": [
             "National Treasure",
@@ -7313,8 +7335,8 @@
     "Sci-Fi Films": {
         "niche": false,
         "tags": [
-            "Movies",
-            "Sci-Fi"
+            "🍿 Entertainment & Pop Culture",
+            "Movies"
         ],
         "items": [
             "Star Wars: Episode IV - A New Hope",
@@ -7422,7 +7444,7 @@
     "Major Cities in North America": {
         "niche": false,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Cities"
         ],
         "items": [
@@ -7531,7 +7553,7 @@
     "Major Cities in South America": {
         "niche": true,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Cities"
         ],
         "items": [
@@ -7640,7 +7662,7 @@
     "Major Cities in Europe": {
         "niche": false,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Cities"
         ],
         "items": [
@@ -7749,7 +7771,7 @@
     "Major Cities in Asia": {
         "niche": false,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Cities"
         ],
         "items": [
@@ -7858,7 +7880,7 @@
     "Major Cities in Africa": {
         "niche": true,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Cities"
         ],
         "items": [
@@ -7962,7 +7984,7 @@
     "Major Cities in Oceania": {
         "niche": true,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Cities"
         ],
         "items": [
@@ -8071,9 +8093,8 @@
     "Biblical Stories": {
         "niche": false,
         "tags": [
-            "Religion",
-            "History",
-            "Literature"
+            "🏛 History & Society",
+            "Religion"
         ],
         "items": [
             "Creation of the World",
@@ -8181,9 +8202,8 @@
     "Books of the Bible": {
         "niche": false,
         "tags": [
-            "Religion",
-            "Literature",
-            "History"
+            "🏛 History & Society",
+            "Religion"
         ],
         "items": [
             "Genesis",
@@ -8257,9 +8277,8 @@
     "Afro-Eurasian World Heritage Sites": {
         "niche": false,
         "tags": [
-            "History",
-            "Geography",
-            "Travel"
+            "🌍 Geography & Places",
+            "Landmarks"
         ],
         "items": [
             "Great Wall of China",
@@ -8389,7 +8408,7 @@
     "Car Brands": {
         "niche": false,
         "tags": [
-            "Automotive",
+            "💼 Business & Tech",
             "Brands"
         ],
         "items": [
@@ -8498,8 +8517,7 @@
     "German Car Models": {
         "niche": true,
         "tags": [
-            "Automotive",
-            "Cars"
+            "🍿 Entertainment & Pop Culture"
         ],
         "items": [
             "Golf",
@@ -8607,8 +8625,7 @@
     "American Car Models": {
         "niche": true,
         "tags": [
-            "Automotive",
-            "Cars"
+            "🍿 Entertainment & Pop Culture"
         ],
         "items": [
             "Mustang",
@@ -8716,7 +8733,7 @@
     "Rivers of the World": {
         "niche": false,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Nature"
         ],
         "items": [
@@ -8825,7 +8842,7 @@
     "Lakes of the World": {
         "niche": true,
         "tags": [
-            "Geography",
+            "🌍 Geography & Places",
             "Nature"
         ],
         "items": [
@@ -8934,9 +8951,8 @@
     "Yu-Gi-Oh! Cards": {
         "niche": true,
         "tags": [
-            "Games",
-            "Anime",
-            "Pop Culture"
+            "🏈 Sports & Games",
+            "Video Games"
         ],
         "items": [
             "Blue-Eyes White Dragon",
@@ -9044,8 +9060,7 @@
     "My Little Pony Characters": {
         "niche": true,
         "tags": [
-            "Animation",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture"
         ],
         "items": [
             "Twilight Sparkle",
@@ -9153,8 +9168,8 @@
     "League of Legends Champions": {
         "niche": true,
         "tags": [
-            "Games",
-            "Esports"
+            "🏈 Sports & Games",
+            "Video Games"
         ],
         "items": [
             "Ahri",
@@ -9262,8 +9277,8 @@
     "Disney Characters": {
         "niche": false,
         "tags": [
-            "Animation",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Animation & Comics"
         ],
         "items": [
             "Mickey Mouse",
@@ -9375,8 +9390,8 @@
     "Disney Movies": {
         "niche": false,
         "tags": [
-            "Movies",
-            "Animation"
+            "🍿 Entertainment & Pop Culture",
+            "Movies"
         ],
         "items": [
             "The Lion King",
@@ -9476,8 +9491,8 @@
     "S&P 500 Stock Market Symbols": {
         "niche": true,
         "tags": [
-            "Economics",
-            "Tech"
+            "💼 Business & Tech",
+            "Finance"
         ],
         "items": [
             "AAPL",
@@ -9578,7 +9593,7 @@
     "Beauty Product Brands": {
         "niche": false,
         "tags": [
-            "Lifestyle",
+            "💼 Business & Tech",
             "Brands"
         ],
         "items": [
@@ -9685,9 +9700,8 @@
     "Reptiles": {
         "niche": false,
         "tags": [
-            "Animals",
-            "Nature",
-            "Science"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Snake",
@@ -9795,9 +9809,8 @@
     "Amphibians": {
         "niche": true,
         "tags": [
-            "Animals",
-            "Nature",
-            "Science"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Frog",
@@ -9905,9 +9918,8 @@
     "Mammals": {
         "niche": false,
         "tags": [
-            "Animals",
-            "Nature",
-            "Science"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Dog",
@@ -10015,9 +10027,8 @@
     "Birds": {
         "niche": false,
         "tags": [
-            "Animals",
-            "Nature",
-            "Science"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Eagle",
@@ -10125,8 +10136,8 @@
     "Popular TV Series": {
         "niche": false,
         "tags": [
-            "Television",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Television"
         ],
         "items": [
             "Breaking Bad",
@@ -10233,9 +10244,8 @@
     "Scientific Names of Mammals": {
         "niche": true,
         "tags": [
-            "Science",
-            "Animals",
-            "Biology"
+            "🔬 Science & Nature",
+            "Animals"
         ],
         "items": [
             "Homo sapiens",
@@ -10343,9 +10353,8 @@
     "Nobel Laureates": {
         "niche": true,
         "tags": [
-            "History",
-            "Science",
-            "Literature"
+            "🏛 History & Society",
+            "Historical Figures"
         ],
         "items": [
             "Albert Einstein",
@@ -10452,8 +10461,8 @@
     "Famous Authors": {
         "niche": false,
         "tags": [
-            "Literature",
-            "People"
+            "🎨 Arts & Literature",
+            "Books"
         ],
         "items": [
             "William Shakespeare",
@@ -10561,8 +10570,8 @@
     "Famous Poets": {
         "niche": true,
         "tags": [
-            "Literature",
-            "People"
+            "🎨 Arts & Literature",
+            "Poetry"
         ],
         "items": [
             "Walt Whitman",
@@ -10665,7 +10674,7 @@
     "Literary Classics": {
         "niche": false,
         "tags": [
-            "Literature",
+            "🎨 Arts & Literature",
             "Books"
         ],
         "items": [
@@ -10774,9 +10783,8 @@
     "F1 Drivers": {
         "niche": true,
         "tags": [
-            "Sports",
-            "Racing",
-            "F1"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Lewis Hamilton",
@@ -10883,9 +10891,8 @@
     "Football Players": {
         "niche": true,
         "tags": [
-            "Sports",
-            "American Football",
-            "NFL"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Tom Brady",
@@ -10993,9 +11000,8 @@
     "Soccer Players": {
         "niche": false,
         "tags": [
-            "Sports",
-            "Soccer",
-            "Football"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Lionel Messi",
@@ -11103,10 +11109,8 @@
     "F1 Racetracks Used Throughout History": {
         "niche": true,
         "tags": [
-            "Sports",
-            "Racing",
-            "F1",
-            "Geography"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Monaco",
@@ -11193,9 +11197,8 @@
     "Baseball Players": {
         "niche": true,
         "tags": [
-            "Sports",
-            "Baseball",
-            "MLB"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Babe Ruth",
@@ -11303,9 +11306,8 @@
     "Hockey Players": {
         "niche": true,
         "tags": [
-            "Sports",
-            "Hockey",
-            "NHL"
+            "🏈 Sports & Games",
+            "Traditional Sports"
         ],
         "items": [
             "Wayne Gretzky",
@@ -11413,9 +11415,8 @@
     "Flowers": {
         "niche": false,
         "tags": [
-            "Nature",
-            "Plants",
-            "Gardening"
+            "🔬 Science & Nature",
+            "Plants"
         ],
         "items": [
             "Rose",
@@ -11523,9 +11524,8 @@
     "Cryptocurrencies": {
         "niche": true,
         "tags": [
-            "Finance",
-            "Technology",
-            "Digital Assets"
+            "💼 Business & Tech",
+            "Finance"
         ],
         "items": [
             "Bitcoin",
@@ -11632,10 +11632,8 @@
     "Human Muscles": {
         "niche": true,
         "tags": [
-            "Medicine",
-            "Anatomy",
-            "Science",
-            "Health"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Gluteus Maximus",
@@ -11743,10 +11741,8 @@
     "Prescription Medications": {
         "niche": true,
         "tags": [
-            "Medicine",
-            "Drugs",
-            "Health",
-            "Science"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Lisinopril",
@@ -11854,10 +11850,8 @@
     "Medical Instruments and Equipment": {
         "niche": true,
         "tags": [
-            "Medicine",
-            "Science",
-            "Technology",
-            "Health"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Stethoscope",
@@ -11965,10 +11959,8 @@
     "Genetic Disorders": {
         "niche": true,
         "tags": [
-            "Medicine",
-            "Science",
-            "Biology",
-            "Health"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Down Syndrome",
@@ -12076,10 +12068,8 @@
     "Specific Human Bones": {
         "niche": true,
         "tags": [
-            "Medicine",
-            "Anatomy",
-            "Science",
-            "Health"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Frontal Bone",
@@ -12187,9 +12177,8 @@
     "Medical Procedures and Surgeries": {
         "niche": true,
         "tags": [
-            "Medicine",
-            "Health",
-            "Science"
+            "🔬 Science & Nature",
+            "Medicine"
         ],
         "items": [
             "Appendectomy",
@@ -12293,9 +12282,8 @@
     "Architectural Styles": {
         "niche": true,
         "tags": [
-            "Art",
-            "History",
-            "Architecture"
+            "🎨 Arts & Literature",
+            "Design"
         ],
         "items": [
             "Ancient Egyptian",
@@ -12403,10 +12391,8 @@
     "Minecraft YouTubers": {
         "niche": true,
         "tags": [
-            "YouTube",
-            "Gaming",
-            "Minecraft",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Internet"
         ],
         "items": [
             "Dream",
@@ -12517,9 +12503,8 @@
     "Chess Openings": {
         "niche": true,
         "tags": [
-            "Games",
-            "Chess",
-            "Strategy"
+            "🏈 Sports & Games",
+            "Tabletop Games"
         ],
         "items": [
             "Ruy Lopez",
@@ -12626,9 +12611,8 @@
     "Chess Players": {
         "niche": true,
         "tags": [
-            "Games",
-            "Chess",
-            "People"
+            "🏈 Sports & Games",
+            "Tabletop Games"
         ],
         "items": [
             "Magnus Carlsen",
@@ -12736,9 +12720,8 @@
     "Memes": {
         "niche": false,
         "tags": [
-            "Internet",
-            "Pop Culture",
-            "Humor"
+            "🍿 Entertainment & Pop Culture",
+            "Internet"
         ],
         "items": [
             "Rickroll",
@@ -12846,9 +12829,8 @@
     "Geoguessr Metas": {
         "niche": true,
         "tags": [
-            "Gaming",
-            "Geography",
-            "Internet Culture"
+            "🏈 Sports & Games",
+            "Video Games"
         ],
         "items": [
             "Gen 4 Camera",
@@ -12956,9 +12938,8 @@
     "Anime Series": {
         "niche": false,
         "tags": [
-            "Animation",
-            "Japanese Culture",
-            "Pop Culture"
+            "🍿 Entertainment & Pop Culture",
+            "Animation & Comics"
         ],
         "items": [
             "Dragon Ball Z",
@@ -13066,9 +13047,8 @@
     "Comic Series and Graphic Novels": {
         "niche": false,
         "tags": [
-            "Comics",
-            "Literature",
-            "Pop Culture"
+            "🎨 Arts & Literature",
+            "Animation & Comics"
         ],
         "items": [
             "The Amazing Spider-Man",

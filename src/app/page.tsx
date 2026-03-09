@@ -80,14 +80,20 @@ function GameContent() {
     e.dataTransfer.setData('application/json', JSON.stringify(tile));
   }, []);
 
-  const onDrop = useCallback((e: React.DragEvent, targetTile: Tile) => {
+  const onDrop = useCallback((e: React.DragEvent, targetTile: Tile, intent: 'before' | 'after' | 'merge') => {
     e.preventDefault();
     if (targetTile.locked) return;
     try {
       const draggedTileData = e.dataTransfer.getData('application/json');
       if (!draggedTileData) return;
       const draggedTile = JSON.parse(draggedTileData) as Tile;
-      if (draggedTile.id !== targetTile.id) game.merge(targetTile.id, draggedTile.id);
+      if (draggedTile.id !== targetTile.id) {
+        if (intent === 'merge') {
+          game.merge(targetTile.id, draggedTile.id);
+        } else {
+          game.insert(draggedTile.id, targetTile.id, intent);
+        }
+      }
     } catch (err) { console.error(err); }
   }, [game]);
 

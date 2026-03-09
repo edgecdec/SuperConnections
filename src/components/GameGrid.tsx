@@ -21,7 +21,7 @@ interface GameGridProps {
   onMenuOpen: (e: React.MouseEvent<HTMLButtonElement>, id: string) => void;
   onTileClick: (e: React.MouseEvent, tile: Tile) => void;
   onDragStart: (e: React.DragEvent<HTMLDivElement>, tile: Tile) => void;
-  onDrop: (e: React.DragEvent<HTMLDivElement>, targetTile: Tile) => void;
+  onDrop: (e: React.DragEvent<HTMLDivElement>, targetTile: Tile, intent: 'before' | 'after' | 'merge') => void;
   onTileAuxClick: (e: React.MouseEvent, tile: Tile) => void;
   scrollPosRef: React.RefObject<number>;
 }

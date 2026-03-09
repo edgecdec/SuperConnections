@@ -252,6 +252,29 @@ export function useGameLogic(initialRoomCode: string | null) {
           lastActionResult: null
         };
         break;
+      case 'INSERT_TILE': {
+        const { draggedTileId, targetTileId, position } = action.payload;
+        let nextTiles = [...prevState.tiles];
+        const draggedIdx = nextTiles.findIndex(t => t.id === draggedTileId);
+        const targetIdx = nextTiles.findIndex(t => t.id === targetTileId);
+        if (draggedIdx === -1 || targetIdx === -1) break;
+
+        const draggedTile = { ...nextTiles[draggedIdx] };
+        const targetTile = nextTiles[targetIdx];
+
+        // Move to the same column
+        const targetCol = targetTile.durableKey % prevState.tilesPerRow;
+        draggedTile.col = targetCol;
+        
+        // Adjust the order key slightly before or after the target so it sorts correctly in physics
+        draggedTile.order = targetTile.order + (position === 'before' ? -0.5 : 0.5);
+        draggedTile.durableKey = targetTile.durableKey; // ensure it buckets to the same column initially
+
+        nextTiles[draggedIdx] = draggedTile;
+
+        result.next = { ...prevState, tiles: applyGridPhysics(nextTiles, prevState.settings, prevState.tilesPerRow), lastActionResult: null };
+        break;
+      }
       case 'REORDER_TILE': {
         const { tileId, direction } = action.payload;
         let nextTiles = [...prevState.tiles];
@@ -408,6 +431,7 @@ export function useGameLogic(initialRoomCode: string | null) {
     shuffle: () => handleAction({ type: 'SHUFFLE_BOARD' }),
     setPlayerName: (name: string) => handleAction({ type: 'SET_PLAYER_NAME', payload: { name } }),
     reorder: (tileId: string, direction: 'top' | 'bottom') => handleAction({ type: 'REORDER_TILE', payload: { tileId, direction } }),
+    insert: (draggedTileId: string, targetTileId: string, position: 'before' | 'after') => handleAction({ type: 'INSERT_TILE', payload: { draggedTileId, targetTileId, position } }),
     start: (multi: boolean, settings: GameSettings) => {
       const { numCategories, itemsPerCategory, difficulty, includeNiche, activeTags, manualCategories, customCategories } = settings;
       let selectedCatsInfo: { name: string, items: string[] }[] = [];
