@@ -90,16 +90,16 @@ export function useGameLogic(initialRoomCode: string | null) {
       let newUserGroups = [...prevState.userGroups];
       const existingGroupIndex = newUserGroups.findIndex(g => g.id === targetId);
 
-      // Extract words from the merged tile (which itself could be a master)
+      // Extract words from both tiles
       const mergedWords = merged.userGroupId ? 
         (prevState.userGroups.find(g => g.id === merged.userGroupId)?.words || [merged.text]) : 
         [merged.text];
 
-      if (existingGroupIndex === -1) {
-        const survivorWords = survivor.userGroupId ? 
-          (prevState.userGroups.find(g => g.id === survivor.userGroupId)?.words || [survivor.text]) : 
-          [survivor.text];
+      const survivorWords = survivor.userGroupId ? 
+        (prevState.userGroups.find(g => g.id === survivor.userGroupId)?.words || [survivor.text]) : 
+        [survivor.text];
 
+      if (existingGroupIndex === -1) {
         newUserGroups.push({ 
           id: targetId as string, 
           name: '', 
@@ -109,7 +109,7 @@ export function useGameLogic(initialRoomCode: string | null) {
         });
       } else {
         const existingGroup = newUserGroups[existingGroupIndex];
-        const newWords = Array.from(new Set([...(existingGroup.words || []), ...mergedWords]));
+        const newWords = Array.from(new Set([...(existingGroup.words || []), ...survivorWords, ...mergedWords]));
         newUserGroups[existingGroupIndex] = { ...existingGroup, words: newWords, lastUpdated: Date.now() };
       }
 
