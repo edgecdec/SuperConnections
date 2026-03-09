@@ -4,6 +4,7 @@ import React, { useState, useCallback, Suspense, useMemo, useEffect, useRef } fr
 import { useSearchParams } from 'next/navigation';
 import { Container, Snackbar, Alert, Box, Paper, Typography, IconButton } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
+import confetti from 'canvas-confetti';
 
 import { Tile } from '../types';
 import { useGameLogic } from '../hooks/useGameLogic';
@@ -37,6 +38,57 @@ function GameContent() {
   const [toast, setToast] = useState<{ open: boolean; message: string; severity: 'success' | 'warning' | 'info' | 'error' }>({
     open: false, message: '', severity: 'info',
   });
+
+  const prevCompletedCountRef = useRef(0);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      prevCompletedCountRef.current = 0;
+      return;
+    }
+
+    const currentCount = state.completedCategories.length;
+    if (currentCount > prevCompletedCountRef.current) {
+      const isFullWin = currentCount === state.settings.numCategories;
+      
+      if (state.settings.soundEnabled !== false) {
+        const audio = new Audio(isFullWin ? '/sounds/dailydouble.mp3' : '/sounds/board_fill.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(e => console.error("Audio playback failed:", e));
+      }
+
+      if (isFullWin) {
+        const duration = 5 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 10000 };
+
+        const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+        const interval: any = setInterval(function() {
+          const timeLeft = animationEnd - Date.now();
+
+          if (timeLeft <= 0) {
+            return clearInterval(interval);
+          }
+
+          const particleCount = 50 * (timeLeft / duration);
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } });
+          confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } });
+        }, 250);
+      } else {
+        confetti({
+          particleCount: 150,
+          spread: 80,
+          origin: { y: 0.8 },
+          zIndex: 10000
+        });
+      }
+
+      prevCompletedCountRef.current = currentCount;
+    } else if (currentCount < prevCompletedCountRef.current) {
+      prevCompletedCountRef.current = currentCount; // Just in case of resets
+    }
+  }, [state.completedCategories.length, state.settings?.numCategories, state.settings?.soundEnabled, isPlaying]);
 
   // --- STABLE HANDLERS (Refs + Callbacks) ---
   
