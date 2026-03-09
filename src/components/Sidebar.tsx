@@ -34,7 +34,7 @@ interface SidebarProps {
   autoRefill: boolean;
   groupStats: (UserGroup & { count: number })[];
   isHost: boolean;
-  onUpdateSettings: (settings: { tilesPerRow?: number; autoRefill?: boolean }) => void;
+  onUpdateSettings: (settings: { tilesPerRow?: number; autoRefill?: boolean; soundEnabled?: boolean }) => void;
   onRefillBoard: () => void;
   onShuffleBoard: () => void;
   onQuitGame: () => void;
@@ -150,6 +150,15 @@ export const Sidebar = React.memo(({
                 />
               }
               label="Auto-Refill Rows"
+            />
+            <FormControlLabel
+              control={
+                <Switch 
+                  checked={settings.soundEnabled ?? true} 
+                  onChange={(e) => onUpdateSettings({ soundEnabled: e.target.checked })} 
+                />
+              }
+              label="Sound Effects"
             />
             <Box display="flex" flexDirection="column" gap={1} mt={1}>
               <Button 

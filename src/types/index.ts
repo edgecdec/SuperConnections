@@ -54,6 +54,7 @@ export type GameSettings = {
   customCategories?: { name: string, items: string[] }[];
   popToTop: boolean;
   gravity: 'none' | 'up';
+  soundEnabled?: boolean;
 };
 
 export type GameState = {
@@ -79,7 +80,7 @@ export type GameAction =
   | { type: 'CREATE_GROUP'; payload: { tileId: string | null; group: UserGroup } }
   | { type: 'REFILL_BOARD'; payload?: never }
   | { type: 'SHUFFLE_BOARD'; payload?: never }
-  | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } }
+  | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean; soundEnabled?: boolean } }
   | { type: 'CLEAR_RESULT'; payload?: never }
   | { type: 'SET_PLAYER_NAME'; payload: { name: string } }
   | { type: 'START_GAME'; payload: { settings: GameSettings; tiles: Tile[] } }

@@ -343,6 +343,7 @@ app.prepare().then(() => {
                     state.tiles = applyGridPhysics(state.tiles, state.settings, state.tilesPerRow);
                 }
                 if (action.payload.autoRefill !== undefined) state.autoRefill = action.payload.autoRefill;
+                if (action.payload.soundEnabled !== undefined) state.settings.soundEnabled = action.payload.soundEnabled;
                 stateChanged = true;
                 actionResult = { success: true, actionType: action.type };
                 break;

@@ -127,8 +127,17 @@ function GameContent() {
         message: lastActionResult.success ? `${actionLabel} Successful!` : (lastActionResult.message || 'Incorrect match!'), 
         severity: lastActionResult.success ? 'success' : 'error' 
       });
+
+      // Play Sound Effects
+      if (state.settings.soundEnabled !== false) {
+        if (lastActionResult.actionType === 'MERGE_TILES' || lastActionResult.actionType === 'TAG_TILE') {
+          const audio = new Audio(lastActionResult.success ? '/sounds/correct.mp3' : '/sounds/wrong.mp3');
+          audio.volume = 0.5;
+          audio.play().catch(e => console.error("Audio playback failed:", e));
+        }
+      }
     }
-  }, [lastActionResult]);
+  }, [lastActionResult, state.settings.soundEnabled]);
 
   const renderGame = () => (
     <Box display="flex" height="100vh" p={2} gap={2}>

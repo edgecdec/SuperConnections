@@ -16,7 +16,8 @@ const DEFAULT_SETTINGS: GameSettings = {
   activeTags: [],
   manualCategories: [],
   popToTop: true,
-  gravity: 'up'
+  gravity: 'up',
+  soundEnabled: true
 };
 
 const shuffleArray = <T>(array: T[]): T[] => {
