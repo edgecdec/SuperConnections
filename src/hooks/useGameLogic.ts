@@ -579,7 +579,16 @@ export function useGameLogic(initialRoomCode: string | null) {
 
   const solvedItemMap = useMemo(() => {
     const map: Record<string, string> = {};
-    state.completedCategories.forEach(cat => { map[cat] = state.tiles.filter(t => t.realCategory === cat && !t.hidden).map(t => t.text).join(', '); });
+    state.completedCategories.forEach(cat => { 
+      const masterTile = state.tiles.find(t => t.realCategory === cat && t.isMaster);
+      if (masterTile) {
+        // Master tile has all words in its text property
+        map[cat] = masterTile.text;
+      } else {
+        // Fallback for older sessions or unmerged auto-solves
+        map[cat] = state.tiles.filter(t => t.realCategory === cat && !t.hidden).map(t => t.text).join(', '); 
+      }
+    });
     return map;
   }, [state.completedCategories, state.tiles]);
 
