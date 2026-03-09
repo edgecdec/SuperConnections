@@ -44,6 +44,7 @@ interface SidebarProps {
   onDropOnGroup: (e: React.DragEvent, groupId: string) => void;
   elapsedTime: number;
   playerStats: Record<string, PlayerStatsType>;
+  currentUserId: string | null;
   onSetPlayerName: (name: string) => void;
   settings: GameSettings;
 }
@@ -79,6 +80,7 @@ export const Sidebar = React.memo(({
   onDropOnGroup,
   elapsedTime,
   playerStats,
+  currentUserId,
   onSetPlayerName,
   settings
 }: SidebarProps) => {
@@ -116,7 +118,7 @@ export const Sidebar = React.memo(({
     
       <Divider sx={{ my: 2 }} />
 
-      <PlayerStats playerStats={playerStats} onSetPlayerName={onSetPlayerName} />
+      <PlayerStats playerStats={playerStats} currentUserId={currentUserId} onSetPlayerName={onSetPlayerName} />
 
       <Divider sx={{ my: 2 }} />
 

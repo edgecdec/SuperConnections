@@ -16,12 +16,19 @@ import { RenameDialog } from './RenameDialog';
 
 interface PlayerStatsProps {
   playerStats: Record<string, PlayerStatsType>;
+  currentUserId: string | null;
   onSetPlayerName: (name: string) => void;
 }
 
-export const PlayerStats = React.memo(({ playerStats, onSetPlayerName }: PlayerStatsProps) => {
+export const PlayerStats = React.memo(({ playerStats, currentUserId, onSetPlayerName }: PlayerStatsProps) => {
   const [statsExpanded, setStatsExpanded] = useState(false);
   const [nameDialogOpen, setNameDialogOpen] = useState(false);
+
+  // Filter out 'local' if we are in multiplayer and have a real userId
+  const filteredStats = Object.entries(playerStats).filter(([id]) => {
+    if (currentUserId && id === 'local') return false;
+    return true;
+  });
 
   return (
     <Box mb={1}>
@@ -43,15 +50,18 @@ export const PlayerStats = React.memo(({ playerStats, onSetPlayerName }: PlayerS
           <Button size="small" variant="outlined" onClick={() => setNameDialogOpen(true)} sx={{ mb: 1 }}>Set My Name</Button>
         </Box>
         <List dense>
-          {Object.entries(playerStats).map(([id, stats]) => (
-            <ListItem key={id} divider sx={{ px: 1 }}>
-              <ListItemText 
-                primary={stats.name}
-                secondary={`Score: ${stats.score} | Mistakes: ${stats.mistakes}`}
-                primaryTypographyProps={{ variant: 'body2', fontWeight: 'bold' }}
-              />
-            </ListItem>
-          ))}
+          {filteredStats.map(([id, stats]) => {
+            const isMe = id === currentUserId || (!currentUserId && id === 'local');
+            return (
+              <ListItem key={id} divider sx={{ px: 1 }}>
+                <ListItemText 
+                  primary={isMe ? `${stats.name} (You)` : stats.name}
+                  secondary={`Score: ${stats.score} | Mistakes: ${stats.mistakes}`}
+                  primaryTypographyProps={{ variant: 'body2', fontWeight: isMe ? 'bold' : 'normal', color: isMe ? 'primary' : 'textPrimary' }}
+                />
+              </ListItem>
+            );
+          })}
         </List>
       </Collapse>
 

@@ -19,7 +19,7 @@ function GameContent() {
   const roomCodeFromUrl = searchParams.get('room');
 
   const {
-    state, isPlaying, isHost, groupStats, selectedTile, setSelectedTile,
+    state, isPlaying, isHost, userId, groupStats, selectedTile, setSelectedTile,
     game, groupIdMap, groupItemMap, solvedItemMap, activeTiles, localTouchedGroupIds, elapsedTime, scrollPosRef
   } = useGameLogic(roomCodeFromUrl);
 
@@ -204,7 +204,7 @@ function GameContent() {
       />
 
       <Sidebar 
-        {...state} sidebarExpanded={sidebarExpanded} setSidebarExpanded={setSidebarExpanded} settingsExpanded={settingsExpanded}
+        {...state} currentUserId={userId} sidebarExpanded={sidebarExpanded} setSidebarExpanded={setSidebarExpanded} settingsExpanded={settingsExpanded}
         setSettingsExpanded={setSettingsExpanded} groupStats={groupStats} isHost={isHost}
         onUpdateSettings={game.updateSettings} onRefillBoard={game.refill} onShuffleBoard={game.shuffle} onQuitGame={game.quit}
         onCreateNewGroup={() => {

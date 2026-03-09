@@ -142,6 +142,11 @@ app.prepare().then(() => {
        const room = rooms[roomCode];
        if (room.state) {
            if (!room.state.playerStats) room.state.playerStats = {};
+           // Remove the client-side 'local' placeholder if it leaked to the server
+           if (room.state.playerStats['local']) {
+               delete room.state.playerStats['local'];
+           }
+           
            if (!room.state.playerStats[userId]) {
                room.state.playerStats[userId] = {
                    name: `Player ${userId.substring(0, 4)}`,
