@@ -438,6 +438,8 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
       const { numCategories, itemsPerCategory, difficulty, includeNiche, activeTags, manualCategories, customCategories } = settings;
       let selectedCatsInfo: { name: string, items: string[] }[] = [];
 
+      console.log(`[START_GAME] Settings: num=${numCategories}, items=${itemsPerCategory}, difficulty=${difficulty}, niche=${includeNiche}, tags=${activeTags.length}`);
+
       if (customCategories && customCategories.length > 0) {
         selectedCatsInfo = customCategories.map(c => ({ name: c.name, items: c.items.slice(0, itemsPerCategory) })).slice(0, numCategories);
       } else {
@@ -449,13 +451,19 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
           return true;
         });
 
+        console.log(`[START_GAME] Category Pool Size: ${pool.length}`);
+
         let selectedNames: string[] = [];
-        if (manualCategories.length > 0) { selectedNames = manualCategories.filter(name => categoriesData[name]); }
+        if (manualCategories.length > 0) { 
+          selectedNames = manualCategories.filter(name => categoriesData[name]); 
+          console.log(`[START_GAME] Manual Categories selected: ${selectedNames.length}`);
+        }
         
         const remainingNeeded = numCategories - selectedNames.length;
         if (remainingNeeded > 0) {
           const shuffledPool = shuffleArray(pool.filter(name => !selectedNames.includes(name)));
           selectedNames = [...selectedNames, ...shuffledPool.slice(0, remainingNeeded)];
+          console.log(`[START_GAME] Total names after random fill: ${selectedNames.length}`);
         }
 
         const usedItems = new Set<string>();
@@ -476,8 +484,17 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
 
           if (addedItems.length === itemsPerCategory) {
             selectedCatsInfo.push({ name: catName, items: addedItems });
+          } else {
+            console.log(`[START_GAME] Category "${catName}" rejected: only had ${addedItems.length}/${itemsPerCategory} unique items`);
           }
         });
+      }
+
+      console.log(`[START_GAME] Final selectedCatsInfo length: ${selectedCatsInfo.length}`);
+
+      if (selectedCatsInfo.length === 0) {
+        console.error("[START_GAME] No categories selected! Game cannot start.");
+        return;
       }
 
       let initialTiles: Tile[] = [];
@@ -552,7 +569,7 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
 
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   useEffect(() => {
-    if (isPlaying && !state.roomCode) {
+    if (isPlaying) {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => { localStorage.setItem('superConnectionsState', JSON.stringify({ ...state, isPlaying: true })); }, 1000);
     } else if (!isPlaying && !state.roomCode) { localStorage.removeItem('superConnectionsState'); }
