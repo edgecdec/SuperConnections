@@ -20,7 +20,7 @@ git reset --hard origin/main >> "$LOG_FILE" 2>&1
 
 # Install & Build
 log "Installing dependencies..."
-npm ci --omit=dev >> "$LOG_FILE" 2>&1
+npm ci >> "$LOG_FILE" 2>&1
 
 log "Building..."
 npm run build >> "$LOG_FILE" 2>&1
