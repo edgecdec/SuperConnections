@@ -336,7 +336,12 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
     setTimeout(() => setState(prev => ({ ...prev, lastActionResult: null })), 1500);
   }, []);
 
-  const { dispatchAction, isHost, userId } = useSocket(state.roomCode, ns => { isRemoteUpdate.current = true; setState(ns); setIsPlaying(true); setTimeout(() => { isRemoteUpdate.current = false; }, 200); }, () => isPlaying ? stateRef.current : null, a => setState(prev => applyActionToState(a, prev).next), onActionResult);
+  const { dispatchAction, isHost, userId } = useSocket(state.roomCode, ns => { 
+    isRemoteUpdate.current = true; 
+    setState(prev => ({ ...ns, roomCode: prev.roomCode })); 
+    setIsPlaying(true); 
+    setTimeout(() => { isRemoteUpdate.current = false; }, 200); 
+  }, () => isPlaying ? stateRef.current : null, a => setState(prev => applyActionToState(a, prev).next), onActionResult);
 
   const [localTouchedGroupIds, setLocalTouchedGroupIds] = useState<string[]>([]);
 
