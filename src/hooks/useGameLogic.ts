@@ -546,6 +546,7 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
         stateRef.current.roomCode = newState.roomCode;
         setState(newState);
         setIsPlaying(true);
+        localStorage.setItem('superConnectionsState', JSON.stringify({ ...newState, isPlaying: true }));
         handleAction({ type: 'START_GAME', payload: { settings, tiles: finalTiles } });
         router.push(`/play?room=${newState.roomCode}`);
       } else {
