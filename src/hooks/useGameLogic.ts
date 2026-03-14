@@ -424,12 +424,12 @@ export function useGameLogic(initialRoomCode: string | null, ignoreLocalSave: bo
   const game = useMemo(() => ({
     merge: (t1: string, t2: string) => handleAction({ type: 'MERGE_TILES', payload: { tile1Id: t1, tile2Id: t2, newGroupColor: getRandomColor(stateRef.current.userGroups.map(g => g.color)), newGroupId: Math.random().toString(36).substring(2, 9) } }),
     tag: (tileId: string, groupId: string | null) => handleAction({ type: 'TAG_TILE', payload: { tileId, groupId, newGroupId: Math.random().toString(36).substring(2, 9) } }),
-    createGroup: (tileId: string | null = null) => {
+    createGroup: (tileId: string | null = null, initialName: string = '') => {
       const targetId = tileId || selectedTileRef.current?.id;
       const targetTile = stateRef.current.tiles.find(t => t.id === targetId);
       if (targetTile?.userGroupId) return null;
       const newId = Math.random().toString(36).substring(2, 9);
-      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: '', color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), words: [], lastUpdated: Date.now() } } });
+      handleAction({ type: 'CREATE_GROUP', payload: { tileId: targetId || null, group: { id: newId, name: initialName, color: getRandomColor(stateRef.current.userGroups.map(g => g.color)), words: [], lastUpdated: Date.now() } } });
       return newId;
     },
     renameGroup: (groupId: string, newName: string) => handleAction({ type: 'RENAME_GROUP', payload: { groupId, newName } }),

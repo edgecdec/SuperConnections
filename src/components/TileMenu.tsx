@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Dialog, 
   DialogTitle, 
@@ -13,11 +13,13 @@ import {
   ListItemText, 
   Divider,
   Box,
-  Typography
+  Typography,
+  IconButton
 } from '@mui/material';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
 import HistoryIcon from '@mui/icons-material/History';
 import GroupIcon from '@mui/icons-material/Group';
+import EditIcon from '@mui/icons-material/Edit';
 import { UserGroup, Tile } from '../types';
 import { getGroupDisplayName } from '../utils/groupUtils';
 
@@ -28,8 +30,9 @@ interface TileMenuProps {
   tiles: Tile[];
   userGroups: UserGroup[];
   localTouchedGroupIds: string[];
-  onCreateGroup: (tileId: string) => void;
+  onCreateGroup: (tileId: string, initialName?: string) => void;
   onTagTile: (tileId: string, groupId: string | null) => void;
+  onOpenRenameDialog: (groupId: string, currentName: string) => void;
 }
 
 export const TileMenu = ({
@@ -40,9 +43,14 @@ export const TileMenu = ({
   userGroups,
   localTouchedGroupIds,
   onCreateGroup,
-  onTagTile
+  onTagTile,
+  onOpenRenameDialog
 }: TileMenuProps) => {
   const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    if (open) setSearch('');
+  }, [open]);
 
   const activeTile = tiles.find(t => t.id === activeTileId);
   
@@ -99,20 +107,26 @@ export const TileMenu = ({
         <TextField
           autoFocus
           margin="dense"
-          label="Search groups..."
+          label="Search or enter new group name..."
           fullWidth
           variant="outlined"
           size="small"
           value={search}
           onChange={e => setSearch(e.target.value)}
           sx={{ mb: 2 }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && activeTileId) {
+              onCreateGroup(activeTileId, search);
+              onClose();
+            }
+          }}
         />
         
         <List sx={{ pt: 0 }}>
           <ListItem disablePadding>
-            <ListItemButton onClick={() => { if (activeTileId) onCreateGroup(activeTileId); onClose(); }}>
+            <ListItemButton onClick={() => { if (activeTileId) onCreateGroup(activeTileId, search); onClose(); }}>
               <ListItemIcon><AddCircleIcon color="primary" /></ListItemIcon>
-              <ListItemText primary="Create New Group" primaryTypographyProps={{ variant: 'body2' }} />
+              <ListItemText primary={`Create New Group${search ? ` "${search}"` : ''}`} primaryTypographyProps={{ variant: 'body2' }} />
             </ListItemButton>
           </ListItem>
           
@@ -134,7 +148,24 @@ export const TileMenu = ({
           {sortedGroups.map(group => {
             const displayName = getGroupDisplayName(group.name, groupItemMap[group.id] || '');
             return (
-              <ListItem key={group.id} disablePadding>
+              <ListItem 
+                key={group.id} 
+                disablePadding
+                secondaryAction={
+                  <IconButton 
+                    edge="end" 
+                    aria-label="edit" 
+                    size="small"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenRenameDialog(group.id, group.name);
+                      onClose();
+                    }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                }
+              >
                 <ListItemButton onClick={() => { if (activeTileId) onTagTile(activeTileId, group.id); onClose(); }}>
                   <ListItemIcon>
                     <Box sx={{ 
@@ -152,7 +183,7 @@ export const TileMenu = ({
                   </ListItemIcon>
                   <ListItemText 
                     primary={`${displayName} (${groupCounts[group.id] || 0})`} 
-                    primaryTypographyProps={{ noWrap: true, variant: 'body2' }}
+                    primaryTypographyProps={{ noWrap: true, variant: 'body2', pr: 4 }}
                   />
                 </ListItemButton>
               </ListItem>

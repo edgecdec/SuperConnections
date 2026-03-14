@@ -40,6 +40,16 @@ function GameContent() {
   });
 
   const prevCompletedCountRef = useRef(0);
+  const selectedTileRefLocal = useRef(selectedTile);
+  const gameRef = useRef(game);
+
+  useEffect(() => {
+    selectedTileRefLocal.current = selectedTile;
+  }, [selectedTile]);
+
+  useEffect(() => {
+    gameRef.current = game;
+  }, [game]);
 
   useEffect(() => {
     if (isLoaded && !isPlaying && !roomCodeFromUrl) {
@@ -109,29 +119,31 @@ function GameContent() {
 
     if (e.ctrlKey) {
       // Ctrl + Click -> Bottom
-      game.reorder(tile.id, 'bottom');
+      gameRef.current.reorder(tile.id, 'bottom');
       return;
     }
 
-    if (selectedTile && selectedTile.id === tile.id) {
+    const currentSelected = selectedTileRefLocal.current;
+
+    if (currentSelected && currentSelected.id === tile.id) {
       setSelectedTile(null);
-    } else if (selectedTile) {
-      game.merge(tile.id, selectedTile.id);
+    } else if (currentSelected) {
+      gameRef.current.merge(tile.id, currentSelected.id);
       setSelectedTile(null);
     } else {
       setSelectedTile(tile);
     }
-  }, [game, selectedTile, setSelectedTile]);
+  }, [setSelectedTile]);
 
   const onTileAuxClick = useCallback((e: React.MouseEvent, tile: Tile) => {
     if (tile.locked) return;
     if (e.button === 1) {
       // Middle Click -> Top (Except combined)
       if (tile.itemCount === 1) {
-        game.reorder(tile.id, 'top');
+        gameRef.current.reorder(tile.id, 'top');
       }
     }
-  }, [game]);
+  }, []);
 
   const onDragStart = useCallback((e: React.DragEvent, tile: Tile) => {
     if (tile.locked) return;
@@ -147,13 +159,13 @@ function GameContent() {
       const draggedTile = JSON.parse(draggedTileData) as Tile;
       if (draggedTile.id !== targetTile.id) {
         if (intent === 'merge') {
-          game.merge(targetTile.id, draggedTile.id);
+          gameRef.current.merge(targetTile.id, draggedTile.id);
         } else {
-          game.insert(draggedTile.id, targetTile.id, intent);
+          gameRef.current.insert(draggedTile.id, targetTile.id, intent);
         }
       }
     } catch (err) { console.error(err); }
-  }, [game]);
+  }, []);
 
   const onDropOnGroup = useCallback((e: React.DragEvent, groupId: string) => {
     e.preventDefault();
@@ -161,16 +173,16 @@ function GameContent() {
       const draggedTileData = e.dataTransfer.getData('application/json');
       if (!draggedTileData) return;
       const draggedTile = JSON.parse(draggedTileData) as Tile;
-      game.tag(draggedTile.id, groupId);
+      gameRef.current.tag(draggedTile.id, groupId);
     } catch (err) { console.error(err); }
-  }, [game]);
+  }, []);
 
   const onRenameSave = useCallback((newName: string) => {
     if (groupToRename) {
-      game.renameGroup(groupToRename, newName);
+      gameRef.current.renameGroup(groupToRename, newName);
       setRenameDialogOpen(false);
     }
-  }, [game, groupToRename]);
+  }, [groupToRename]);
 
   const handleCopyRoomLink = useCallback(() => {
     navigator.clipboard.writeText(`${window.location.origin}/play?room=${state.roomCode}`);
@@ -251,13 +263,16 @@ function GameContent() {
         tiles={state.tiles}
         userGroups={state.userGroups}
         localTouchedGroupIds={localTouchedGroupIds}
-        onCreateGroup={(tileId) => {
-          const newId = game.createGroup(tileId);
+        onCreateGroup={(tileId, initialName) => {
+          const newId = game.createGroup(tileId, initialName);
           if (newId) {
-            setGroupToRename(newId); setInitialGroupName(''); setRenameDialogOpen(true);
+            if (!initialName) {
+              setGroupToRename(newId); setInitialGroupName(''); setRenameDialogOpen(true);
+            }
           }
         }}
         onTagTile={game.tag}
+        onOpenRenameDialog={(id, name) => { setGroupToRename(id); setInitialGroupName(name); setRenameDialogOpen(true); }}
       />
 
       <RenameDialog 
