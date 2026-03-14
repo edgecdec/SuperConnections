@@ -22,6 +22,9 @@ git reset --hard origin/main >> "$LOG_FILE" 2>&1
 log "Installing dependencies..."
 npm ci >> "$LOG_FILE" 2>&1
 
+log "Wiping Next.js cache..."
+rm -rf .next >> "$LOG_FILE" 2>&1
+
 log "Building..."
 npm run build >> "$LOG_FILE" 2>&1
 
