@@ -54,7 +54,6 @@ export type GameSettings = {
   customCategories?: { name: string, items: string[] }[];
   popToTop: boolean;
   gravity: 'none' | 'up';
-  soundEnabled?: boolean;
 };
 
 export type GameState = {
@@ -73,15 +72,14 @@ export type GameState = {
   playerStats: Record<string, PlayerStats>;
 };
 
-export type GameAction = 
+export type GameAction =
   | { type: 'MERGE_TILES'; payload: { tile1Id: string; tile2Id: string; newGroupColor: string; newGroupId: string } }
   | { type: 'RENAME_GROUP'; payload: { groupId: string; newName: string } }
   | { type: 'TAG_TILE'; payload: { tileId: string; groupId: string | null; newGroupId?: string } }
   | { type: 'CREATE_GROUP'; payload: { tileId: string | null; group: UserGroup } }
   | { type: 'REFILL_BOARD'; payload?: never }
   | { type: 'SHUFFLE_BOARD'; payload?: never }
-  | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean; soundEnabled?: boolean } }
-  | { type: 'CLEAR_RESULT'; payload?: never }
+  | { type: 'UPDATE_SETTINGS'; payload: { tilesPerRow?: number; autoRefill?: boolean } }  | { type: 'CLEAR_RESULT'; payload?: never }
   | { type: 'SET_PLAYER_NAME'; payload: { name: string } }
   | { type: 'START_GAME'; payload: { settings: GameSettings; tiles: Tile[] } }
   | { type: 'REORDER_TILE'; payload: { tileId: string; direction: 'top' | 'bottom' } }

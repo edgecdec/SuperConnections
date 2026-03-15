@@ -43,6 +43,18 @@ function GameContent() {
   const selectedTileRefLocal = useRef(selectedTile);
   const gameRef = useRef(game);
 
+  const [localVolume, setLocalVolume] = useState<number>(0.3);
+
+  useEffect(() => {
+    const savedVol = localStorage.getItem('superConnectionsVolume');
+    if (savedVol !== null) setLocalVolume(parseFloat(savedVol));
+  }, []);
+
+  const handleVolumeChange = useCallback((newVol: number) => {
+    setLocalVolume(newVol);
+    localStorage.setItem('superConnectionsVolume', newVol.toString());
+  }, []);
+
   useEffect(() => {
     selectedTileRefLocal.current = selectedTile;
   }, [selectedTile]);
@@ -67,9 +79,9 @@ function GameContent() {
     if (currentCount > prevCompletedCountRef.current) {
       const isFullWin = currentCount === state.settings.numCategories;
       
-      if (state.settings.soundEnabled !== false) {
+      if (localVolume > 0) {
         const audio = new Audio(isFullWin ? '/sounds/dailydouble.mp3' : '/sounds/board_fill.mp3');
-        audio.volume = 0.5;
+        audio.volume = localVolume;
         audio.play().catch(e => console.error("Audio playback failed:", e));
       }
 
@@ -104,7 +116,7 @@ function GameContent() {
     } else if (currentCount < prevCompletedCountRef.current) {
       prevCompletedCountRef.current = currentCount; // Just in case of resets
     }
-  }, [state.completedCategories.length, state.settings?.numCategories, state.settings?.soundEnabled, isPlaying]);
+  }, [state.completedCategories.length, state.settings?.numCategories, localVolume, isPlaying]);
 
   // --- STABLE HANDLERS (Refs + Callbacks) ---
   
@@ -199,15 +211,15 @@ function GameContent() {
       });
 
       // Play Sound Effects
-      if (state.settings.soundEnabled !== false) {
+      if (localVolume > 0) {
         if (lastActionResult.actionType === 'MERGE_TILES' || lastActionResult.actionType === 'TAG_TILE') {
           const audio = new Audio(lastActionResult.success ? '/sounds/correct.mp3' : '/sounds/wrong.mp3');
-          audio.volume = 0.5;
+          audio.volume = localVolume;
           audio.play().catch(e => console.error("Audio playback failed:", e));
         }
       }
     }
-  }, [lastActionResult, state.settings.soundEnabled]);
+  }, [lastActionResult, localVolume]);
 
   const renderGame = () => (
     <Box display="flex" height="100vh" p={2} gap={2}>
@@ -236,6 +248,8 @@ function GameContent() {
         onDropOnGroup={onDropOnGroup}
         elapsedTime={elapsedTime}
         onSetPlayerName={game.setPlayerName}
+        localVolume={localVolume}
+        onUpdateLocalVolume={handleVolumeChange}
       />
 
       {!sidebarExpanded && (

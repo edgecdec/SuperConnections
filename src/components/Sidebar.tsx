@@ -47,6 +47,8 @@ interface SidebarProps {
   currentUserId: string | null;
   onSetPlayerName: (name: string) => void;
   settings: GameSettings;
+  localVolume: number;
+  onUpdateLocalVolume: (vol: number) => void;
 }
 
 const formatTime = (seconds: number) => {
@@ -82,7 +84,9 @@ export const Sidebar = React.memo(({
   playerStats,
   currentUserId,
   onSetPlayerName,
-  settings
+  settings,
+  localVolume,
+  onUpdateLocalVolume
 }: SidebarProps) => {
   if (!sidebarExpanded) return null;
 
@@ -153,14 +157,17 @@ export const Sidebar = React.memo(({
               }
               label="Auto-Refill Rows"
             />
-            <FormControlLabel
-              control={
-                <Switch 
-                  checked={settings.soundEnabled ?? true} 
-                  onChange={(e) => onUpdateSettings({ soundEnabled: e.target.checked })} 
-                />
-              }
-              label="Sound Effects"
+            <Typography gutterBottom sx={{ mt: 1 }}>
+              Local Volume: {Math.round(localVolume * 100)}%
+            </Typography>
+            <Slider
+              value={localVolume}
+              min={0}
+              max={1}
+              step={0.01}
+              onChange={(e, val) => onUpdateLocalVolume(val as number)}
+              valueLabelDisplay="auto"
+              valueLabelFormat={(val) => Math.round(val * 100)}
             />
             <Box display="flex" flexDirection="column" gap={1} mt={1}>
               <Button 

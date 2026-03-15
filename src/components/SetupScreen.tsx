@@ -19,6 +19,7 @@ import {
 } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import DownloadIcon from '@mui/icons-material/Download';
 import { GameSettings, GameDifficulty, CategoryMap } from '../types';
 import categoriesDataRaw from '../data/categories.json';
 import { CategoryPickerModal } from './CategoryPickerModal';
@@ -225,7 +226,18 @@ export const SetupScreen = ({ onStart }: SetupScreenProps) => {
                 <Divider />
 
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom>Custom Board (CSV)</Typography>
+                  <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                    <Typography variant="subtitle2">Custom Board (CSV)</Typography>
+                    <Button 
+                      variant="text" 
+                      size="small" 
+                      href="/example_categories.csv" 
+                      download 
+                      startIcon={<DownloadIcon />}
+                    >
+                      Template
+                    </Button>
+                  </Box>
                   <Button
                     variant="outlined"
                     component="label"
